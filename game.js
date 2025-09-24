@@ -1,14 +1,29 @@
 const canvas = document.getElementById("gameCanvas");
 const ctx = canvas.getContext("2d");
 
-let player = { x: canvas.width / 2, y: canvas.height - 40, width: 50, height: 30 };
-let missiles = [];
-let jets = [];
-let bombs = [];
-let score = 0;
-let health = 10; // Increased health
-let streak = 0;
-let gameOver = false;
+let player, missiles, jets, bombs, score, health, streak, gameOver, powerUp, dualMode, powerTimer;
+let clouds = [];
+
+function init() {
+  player = { x: canvas.width / 2, y: canvas.height - 40, width: 50, height: 30 };
+  missiles = [];
+  jets = [];
+  bombs = [];
+  score = 0;
+  health = 10;
+  streak = 0;
+  gameOver = false;
+  powerUp = null;
+  dualMode = false;
+  powerTimer = 0;
+
+  clouds = [];
+  for (let i = 0; i < 5; i++) {
+    clouds.push({ x: Math.random() * canvas.width, y: Math.random() * 200, speed: 0.3 + Math.random() });
+  }
+}
+
+init();
 
 // Controls
 let keys = {};
@@ -17,28 +32,35 @@ document.addEventListener("keyup", (e) => keys[e.code] = false);
 
 document.addEventListener("keydown", (e) => {
   if (e.code === "Space" && !gameOver) {
-    missiles.push({ x: player.x, y: player.y, r: 4 });
+    if (dualMode) {
+      missiles.push({ x: player.x - 15, y: player.y, r: 4 });
+      missiles.push({ x: player.x + 15, y: player.y, r: 4 });
+    } else {
+      missiles.push({ x: player.x, y: player.y, r: 4 });
+    }
   }
-  if (e.code === "Enter" && gameOver) restartGame();
+  if (e.code === "Enter" && gameOver) {
+    init();
+    loop();
+  }
 });
-
-function restartGame() {
-  score = 0;
-  health = 10;
-  streak = 0;
-  missiles = [];
-  jets = [];
-  bombs = [];
-  gameOver = false;
-  loop(); // restart loop
-}
 
 // Jet spawner
 function spawnJet() {
+  if (gameOver) return;
   const x = Math.random() * (canvas.width - 60);
   jets.push({ x, y: 30, width: 50, height: 20, speed: Math.random() > 0.5 ? 2 : -2, dropped: false });
 }
 setInterval(spawnJet, 2500);
+
+// Power-up spawner
+function spawnPowerUp() {
+  if (gameOver) return;
+  if (Math.random() < 0.3) { // 30% chance
+    powerUp = { x: Math.random() * (canvas.width - 20), y: 50, r: 10 };
+  }
+}
+setInterval(spawnPowerUp, 10000);
 
 // Game loop
 function loop() {
@@ -59,10 +81,9 @@ function loop() {
     jet.x += jet.speed;
     if (jet.x < 0 || jet.x + jet.width > canvas.width) jet.speed *= -1;
 
-    // Drop only one bomb per jet
     if (!jet.dropped && Math.random() < 0.002) {
       bombs.push({ x: jet.x + jet.width / 2, y: jet.y + jet.height, r: 5 });
-      jet.dropped = true; // prevent spam
+      jet.dropped = true;
     }
   });
 
@@ -77,6 +98,24 @@ function loop() {
     }
   });
 
+  // Power-up movement
+  if (powerUp) {
+    powerUp.y += 2;
+    if (powerUp.y > canvas.height - 50) powerUp = null;
+    // Pickup detection
+    if (Math.abs(powerUp.x - player.x) < 25 && Math.abs(powerUp.y - player.y) < 20) {
+      dualMode = true;
+      powerTimer = 600; // ~10 seconds at 60 FPS
+      powerUp = null;
+    }
+  }
+
+  // Decrease power-up timer
+  if (dualMode) {
+    powerTimer--;
+    if (powerTimer <= 0) dualMode = false;
+  }
+
   // Missile-Jet collision
   missiles.forEach((m, mi) => {
     jets.forEach((jet, ji) => {
@@ -87,7 +126,7 @@ function loop() {
         score++;
         streak++;
         if (streak >= 5) {
-          jets = []; // nuke wipes out all jets
+          jets = []; 
           streak = 0;
         }
       }
@@ -105,26 +144,31 @@ function loop() {
     }
   });
 
-  // Draw scene
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-  // Military green background
-  ctx.fillStyle = "#556B2F"; // olive drab
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-  // Sky gradient
+  // Draw background (sky + grass)
   let sky = ctx.createLinearGradient(0, 0, 0, canvas.height);
-  sky.addColorStop(0, "#6b8e23");
+  sky.addColorStop(0, "#87CEEB");
   sky.addColorStop(1, "#2e4e1f");
   ctx.fillStyle = sky;
-  ctx.fillRect(0, 0, canvas.width, canvas.height - 50);
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
 
   // Grass
   ctx.fillStyle = "#2E8B57";
   ctx.fillRect(0, canvas.height - 50, canvas.width, 50);
 
+  // Clouds
+  ctx.fillStyle = "white";
+  clouds.forEach(cloud => {
+    ctx.beginPath();
+    ctx.arc(cloud.x, cloud.y, 20, 0, Math.PI * 2);
+    ctx.arc(cloud.x + 25, cloud.y + 10, 25, 0, Math.PI * 2);
+    ctx.arc(cloud.x - 25, cloud.y + 10, 25, 0, Math.PI * 2);
+    ctx.fill();
+    cloud.x += cloud.speed;
+    if (cloud.x > canvas.width + 50) cloud.x = -50;
+  });
+
   // Player turret
-  ctx.fillStyle = "darkgreen";
+  ctx.fillStyle = dualMode ? "gold" : "darkgreen";
   ctx.beginPath();
   ctx.moveTo(player.x, player.y);
   ctx.lineTo(player.x - 25, player.y + 30);
@@ -159,15 +203,29 @@ function loop() {
     ctx.fill();
   });
 
-  // HUD text
+  // Power-up
+  if (powerUp) {
+    ctx.fillStyle = "blue";
+    ctx.beginPath();
+    ctx.arc(powerUp.x, powerUp.y, powerUp.r, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  // HUD
   document.getElementById("hud").textContent =
-    `Score: ${score} | Streak: ${streak}`;
+    `Score: ${score} | Streak: ${streak} ${dualMode ? "| POWER-UP ACTIVE" : ""}`;
 
   // Health bar
   ctx.fillStyle = "black";
   ctx.fillRect(20, 20, 104, 14);
   ctx.fillStyle = "limegreen";
   ctx.fillRect(22, 22, health * 10, 10);
+
+  // Power-up timer bar
+  if (dualMode) {
+    ctx.fillStyle = "orange";
+    ctx.fillRect(canvas.width - 120, 20, powerTimer / 5, 10);
+  }
 
   // Game over
   if (!gameOver) requestAnimationFrame(loop);

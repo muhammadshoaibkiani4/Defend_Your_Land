@@ -6,7 +6,7 @@ let missiles = [];
 let jets = [];
 let bombs = [];
 let score = 0;
-let health = 3;
+let health = 10; // Increased health
 let streak = 0;
 let gameOver = false;
 
@@ -24,21 +24,21 @@ document.addEventListener("keydown", (e) => {
 
 function restartGame() {
   score = 0;
-  health = 3;
+  health = 10;
   streak = 0;
   missiles = [];
   jets = [];
   bombs = [];
   gameOver = false;
-  loop();
+  loop(); // restart loop
 }
 
 // Jet spawner
 function spawnJet() {
   const x = Math.random() * (canvas.width - 60);
-  jets.push({ x, y: 30, width: 50, height: 20, speed: Math.random() > 0.5 ? 2 : -2 });
+  jets.push({ x, y: 30, width: 50, height: 20, speed: Math.random() > 0.5 ? 2 : -2, dropped: false });
 }
-setInterval(spawnJet, 2000);
+setInterval(spawnJet, 2500);
 
 // Game loop
 function loop() {
@@ -59,9 +59,10 @@ function loop() {
     jet.x += jet.speed;
     if (jet.x < 0 || jet.x + jet.width > canvas.width) jet.speed *= -1;
 
-    // Drop bombs
-    if (Math.random() < 0.01) {
+    // Drop only one bomb per jet
+    if (!jet.dropped && Math.random() < 0.002) {
       bombs.push({ x: jet.x + jet.width / 2, y: jet.y + jet.height, r: 5 });
+      jet.dropped = true; // prevent spam
     }
   });
 
@@ -107,13 +108,22 @@ function loop() {
   // Draw scene
   ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-  // Sky + Grass
-  ctx.fillStyle = "#87ceeb";
+  // Military green background
+  ctx.fillStyle = "#556B2F"; // olive drab
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  // Sky gradient
+  let sky = ctx.createLinearGradient(0, 0, 0, canvas.height);
+  sky.addColorStop(0, "#6b8e23");
+  sky.addColorStop(1, "#2e4e1f");
+  ctx.fillStyle = sky;
   ctx.fillRect(0, 0, canvas.width, canvas.height - 50);
-  ctx.fillStyle = "#228B22";
+
+  // Grass
+  ctx.fillStyle = "#2E8B57";
   ctx.fillRect(0, canvas.height - 50, canvas.width, 50);
 
-  // Player (turret)
+  // Player turret
   ctx.fillStyle = "darkgreen";
   ctx.beginPath();
   ctx.moveTo(player.x, player.y);
@@ -149,9 +159,15 @@ function loop() {
     ctx.fill();
   });
 
-  // HUD
+  // HUD text
   document.getElementById("hud").textContent =
-    `Score: ${score} | Health: ${health} | Streak: ${streak}`;
+    `Score: ${score} | Streak: ${streak}`;
+
+  // Health bar
+  ctx.fillStyle = "black";
+  ctx.fillRect(20, 20, 104, 14);
+  ctx.fillStyle = "limegreen";
+  ctx.fillRect(22, 22, health * 10, 10);
 
   // Game over
   if (!gameOver) requestAnimationFrame(loop);

@@ -1,7 +1,7 @@
 const canvas = document.getElementById("gameCanvas");
 const ctx = canvas.getContext("2d");
 
-let player, missiles, jets, bombs, score, health, streak, gameOver, explosions;
+let player, missiles, jets, orangeJets, bombs, score, health, streak, gameOver, explosions;
 let powerUp, dualMode, powerTimer;
 let blackPower, darkMode, blackTimer;
 let clouds = [];
@@ -10,6 +10,7 @@ function init() {
   player = { x: canvas.width / 2, y: canvas.height - 40, width: 40, height: 30 };
   missiles = [];
   jets = [];
+  orangeJets = []; // NEW orange jets
   bombs = [];
   explosions = [];
   score = 0;
@@ -57,6 +58,14 @@ function spawnJet() {
 }
 setInterval(spawnJet, 3000);
 
+// Orange jet spawner (NEW)
+function spawnOrangeJet() {
+  if (gameOver) return;
+  const x = Math.random() * (canvas.width - 60);
+  orangeJets.push({ x, y: 30, width: 50, height: 20, speed: 2 });
+}
+setInterval(spawnOrangeJet, 5000);
+
 // Power-ups
 function spawnPowerUp() {
   if (gameOver) return;
@@ -68,7 +77,7 @@ setInterval(spawnPowerUp, 12000);
 
 function spawnBlackPowerUp() {
   if (gameOver) return;
-  if (Math.random() < 0.4) { // more chance now
+  if (Math.random() < 0.4) {
     blackPower = { x: Math.random() * (canvas.width - 20), y: 50, r: 12 };
   }
 }
@@ -86,7 +95,6 @@ function loop() {
     ctx.fillStyle = "rgba(0,0,0,0.5)";
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-    // Exploding turret effect
     if (explosions.length === 0) {
       createExplosion(player.x, player.y, true);
     }
@@ -128,6 +136,17 @@ function loop() {
     }
   });
 
+  // Orange jets (straight down)
+  orangeJets.forEach((jet, i) => {
+    jet.y += jet.speed;
+    if (jet.y > canvas.height - 50) {
+      orangeJets.splice(i, 1);
+      health--;
+      streak = 0;
+      if (health <= 0) gameOver = true;
+    }
+  });
+
   // Bombs
   bombs.forEach((b, i) => {
     b.y += 4;
@@ -162,7 +181,7 @@ function loop() {
   if (dualMode && --powerTimer <= 0) dualMode = false;
   if (darkMode && --blackTimer <= 0) darkMode = false;
 
-  // Missile hits
+  // Missile hits normal jets
   missiles.forEach((m, mi) => {
     jets.forEach((jet, ji) => {
       if (m.x > jet.x && m.x < jet.x + jet.width && m.y > jet.y && m.y < jet.y + jet.height) {
@@ -173,6 +192,25 @@ function loop() {
         streak++;
         if (streak >= 5) {
           jets = [];
+          orangeJets = [];
+          streak = 0;
+        }
+      }
+    });
+  });
+
+  // Missile hits orange jets
+  missiles.forEach((m, mi) => {
+    orangeJets.forEach((jet, ji) => {
+      if (m.x > jet.x && m.x < jet.x + jet.width && m.y > jet.y && m.y < jet.y + jet.height) {
+        createExplosion(jet.x + jet.width / 2, jet.y + jet.height / 2);
+        orangeJets.splice(ji, 1);
+        missiles.splice(mi, 1);
+        score++;
+        streak++;
+        if (streak >= 5) {
+          jets = [];
+          orangeJets = [];
           streak = 0;
         }
       }
@@ -230,6 +268,14 @@ function loop() {
   // Jets
   ctx.fillStyle = darkMode ? "red" : "gray";
   jets.forEach(jet => {
+    ctx.fillRect(jet.x + 15, jet.y, 20, 20);
+    ctx.fillRect(jet.x, jet.y + 5, 50, 5);
+    ctx.fillRect(jet.x + 20, jet.y + 20, 10, 10);
+  });
+
+  // Orange Jets (NEW)
+  ctx.fillStyle = "orange";
+  orangeJets.forEach(jet => {
     ctx.fillRect(jet.x + 15, jet.y, 20, 20);
     ctx.fillRect(jet.x, jet.y + 5, 50, 5);
     ctx.fillRect(jet.x + 20, jet.y + 20, 10, 10);

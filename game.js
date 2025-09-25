@@ -104,4 +104,258 @@ function createExplosion(x, y, big = false) {
   explosions.push({ x, y, r: big ? 15 : 5, alpha: 1, grow: big ? 4 : 2 });
 }
 
-// ====================
+// ===================== GAME LOOP =====================
+function loop() {
+  if (gameOver) {
+    ctx.fillStyle = "rgba(0,0,0,0.5)";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    if (explosions.length === 0) {
+      createExplosion(player.x, player.y, true);
+    }
+
+    explosions.forEach((ex, i) => {
+      ex.r += ex.grow;
+      ex.alpha -= 0.05;
+      if (ex.alpha <= 0) explosions.splice(i, 1);
+
+      ctx.fillStyle = `rgba(255,69,0,${ex.alpha})`;
+      ctx.beginPath();
+      ctx.arc(ex.x, ex.y, ex.r, 0, Math.PI * 2);
+      ctx.fill();
+    });
+
+    ctx.fillStyle = "red";
+    ctx.font = "bold 40px Arial";
+    ctx.fillText("GAME OVER", canvas.width / 2 - 120, canvas.height / 2);
+    return;
+  }
+
+  // Player movement
+  if (keys["ArrowLeft"] && player.x > 30) player.x -= 5;
+  if (keys["ArrowRight"] && player.x < canvas.width - 30) player.x += 5;
+
+  // Missiles
+  missiles.forEach((m, i) => {
+    m.y -= darkMode ? 12 : 6;
+    if (m.y < 0) missiles.splice(i, 1);
+  });
+
+  // Jets
+  jets.forEach((jet, i) => {
+    jet.x += jet.speed;
+    if (jet.x < 0 || jet.x + jet.width > canvas.width) jet.speed *= -1;
+    if (!jet.dropped && Math.random() < 0.002) {
+      bombs.push({ x: jet.x + jet.width / 2, y: jet.y + jet.height, r: 5 });
+      jet.dropped = true;
+    }
+  });
+
+  // Orange Jets (descend vertically)
+  orangeJets.forEach((jet, i) => {
+    jet.y += jet.speed;
+    if (!jet.dropped && Math.random() < 0.003) {
+      bombs.push({ x: jet.x + jet.width / 2, y: jet.y + jet.height, r: 5 });
+      jet.dropped = true;
+    }
+    if (jet.y > canvas.height - 50) orangeJets.splice(i, 1);
+  });
+
+  // Bomber spawn after 20 points
+  if (score > 0 && score % 20 === 0 && bombers.length === 0) {
+    spawnBomber();
+  }
+
+  // Bomber movement
+  bombers.forEach((bomber, i) => {
+    bomber.x += bomber.speed;
+    if (bomber.bombsDropped < 3 && Math.random() < 0.02) {
+      bombs.push({ x: bomber.x + bomber.width / 2, y: bomber.y + bomber.height, r: 6 });
+      bomber.bombsDropped++;
+    }
+    if (bomber.x > canvas.width + 100) {
+      bombers.splice(i, 1);
+    }
+  });
+
+  // Bombs
+  bombs.forEach((b, i) => {
+    b.y += 4;
+    if (b.y > canvas.height - 50) {
+      bombs.splice(i, 1);
+      health--;
+      if (health <= 0) gameOver = true;
+    }
+  });
+
+  // Power-up collisions
+  if (powerUp) {
+    powerUp.y += 2;
+    if (powerUp.y > canvas.height - 50) powerUp = null;
+    if (Math.abs(powerUp.x - player.x) < 25 && Math.abs(powerUp.y - player.y) < 20) {
+      dualMode = true;
+      powerTimer = 600;
+      powerUp = null;
+    }
+  }
+  if (blackPower) {
+    blackPower.y += 2;
+    if (blackPower.y > canvas.height - 50) blackPower = null;
+    if (Math.abs(blackPower.x - player.x) < 25 && Math.abs(blackPower.y - player.y) < 20) {
+      darkMode = true;
+      blackTimer = 600;
+      blackPower = null;
+    }
+  }
+
+  if (dualMode && --powerTimer <= 0) dualMode = false;
+  if (darkMode && --blackTimer <= 0) darkMode = false;
+
+  // Missile hits
+  missiles.forEach((m, mi) => {
+    jets.forEach((jet, ji) => {
+      if (m.x > jet.x && m.x < jet.x + jet.width && m.y > jet.y && m.y < jet.y + jet.height) {
+        createExplosion(jet.x + jet.width / 2, jet.y + jet.height / 2);
+        jets.splice(ji, 1);
+        missiles.splice(mi, 1);
+        score++;
+      }
+    });
+    orangeJets.forEach((jet, ji) => {
+      if (m.x > jet.x && m.x < jet.x + jet.width && m.y > jet.y && m.y < jet.y + jet.height) {
+        createExplosion(jet.x + jet.width / 2, jet.y + jet.height / 2);
+        orangeJets.splice(ji, 1);
+        missiles.splice(mi, 1);
+        score++;
+      }
+    });
+    bombers.forEach((bomber, bi) => {
+      if (m.x > bomber.x && m.x < bomber.x + bomber.width && m.y > bomber.y && m.y < bomber.y + bomber.height) {
+        createExplosion(bomber.x + bomber.width / 2, bomber.y + bomber.height / 2, true);
+        bombers.splice(bi, 1);
+        missiles.splice(mi, 1);
+        score += 3;
+      }
+    });
+  });
+
+  // Bomb hits
+  bombs.forEach((b, bi) => {
+    if (b.x > player.x - 20 && b.x < player.x + 20 && b.y > player.y - 20 && b.y < player.y + 20) {
+      bombs.splice(bi, 1);
+      health--;
+      if (health <= 0) gameOver = true;
+    }
+  });
+
+  // Background
+  ctx.fillStyle = darkMode ? "black" : "skyblue";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.fillStyle = darkMode ? "grey" : "green";
+  ctx.fillRect(0, canvas.height - 50, canvas.width, 50);
+
+  // Title
+  ctx.fillStyle = "white";
+  ctx.font = "bold 28px Arial";
+  ctx.fillText("DEFEND YOUR LAND", canvas.width / 2 - 150, 40);
+
+  // Clouds
+  if (!darkMode) {
+    ctx.fillStyle = "white";
+    clouds.forEach(cloud => {
+      ctx.beginPath();
+      ctx.arc(cloud.x, cloud.y, 20, 0, Math.PI * 2);
+      ctx.arc(cloud.x + 25, cloud.y + 10, 25, 0, Math.PI * 2);
+      ctx.arc(cloud.x - 25, cloud.y + 10, 25, 0, Math.PI * 2);
+      ctx.fill();
+      cloud.x += cloud.speed;
+      if (cloud.x > canvas.width + 50) cloud.x = -50;
+    });
+  }
+
+  // Turret
+  ctx.fillStyle = darkMode ? "red" : "darkgreen";
+  ctx.fillRect(player.x - 15, player.y, 30, 20);
+  ctx.fillRect(player.x - 5, player.y - 15, 10, 15);
+
+  // Missiles
+  ctx.fillStyle = "red";
+  missiles.forEach(m => {
+    ctx.beginPath();
+    ctx.arc(m.x, m.y, m.r, 0, Math.PI * 2);
+    ctx.fill();
+  });
+
+  // Jets
+  ctx.fillStyle = darkMode ? "red" : "gray";
+  jets.forEach(jet => {
+    ctx.fillRect(jet.x + 15, jet.y, 20, 20);
+    ctx.fillRect(jet.x, jet.y + 5, 50, 5);
+    ctx.fillRect(jet.x + 20, jet.y + 20, 10, 10);
+  });
+
+  // Orange Jets
+  ctx.fillStyle = "orange";
+  orangeJets.forEach(jet => {
+    ctx.fillRect(jet.x + 15, jet.y, 20, 20);
+    ctx.fillRect(jet.x, jet.y + 5, 50, 5);
+    ctx.fillRect(jet.x + 20, jet.y + 20, 10, 10);
+  });
+
+  // Bombers
+  ctx.fillStyle = "black";
+  bombers.forEach(bomber => {
+    ctx.fillRect(bomber.x + 15, bomber.y, 30, 20);
+    ctx.fillRect(bomber.x, bomber.y + 5, 60, 5);
+    ctx.fillRect(bomber.x + 25, bomber.y + 20, 10, 10);
+  });
+
+  // Bombs
+  ctx.fillStyle = "black";
+  bombs.forEach(b => {
+    ctx.beginPath();
+    ctx.arc(b.x, b.y, b.r, 0, Math.PI * 2);
+    ctx.fill();
+  });
+
+  // Power-ups
+  if (powerUp) {
+    ctx.fillStyle = "blue";
+    ctx.beginPath();
+    ctx.arc(powerUp.x, powerUp.y, powerUp.r, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  if (blackPower) {
+    ctx.fillStyle = "black";
+    ctx.beginPath();
+    ctx.arc(blackPower.x, blackPower.y, blackPower.r, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = "white";
+    ctx.stroke();
+  }
+
+  // Explosions
+  explosions.forEach((ex, i) => {
+    ex.r += ex.grow || 2;
+    ex.alpha -= 0.05;
+    if (ex.alpha <= 0) explosions.splice(i, 1);
+    ctx.fillStyle = `rgba(255,165,0,${ex.alpha})`;
+    ctx.beginPath();
+    ctx.arc(ex.x, ex.y, ex.r, 0, Math.PI * 2);
+    ctx.fill();
+  });
+
+  // HUD
+  document.getElementById("hud").textContent =
+    `Score: ${score} | Health: ${health} ${dualMode ? "| BLUE POWER-UP" : ""} ${darkMode ? "| BLACK POWER-UP" : ""}`;
+
+  // Health bar
+  ctx.fillStyle = "black";
+  ctx.fillRect(20, 20, 104, 14);
+  ctx.fillStyle = "limegreen";
+  ctx.fillRect(22, 22, health * 10, 10);
+
+  requestAnimationFrame(loop);
+}
+
+loop();

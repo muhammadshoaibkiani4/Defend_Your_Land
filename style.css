@@ -1,29 +1,19 @@
 body {
   margin: 0;
-  padding: 0;
-  font-family: "Trebuchet MS", sans-serif;
-  text-align: center;
-  background: #2e2e2e url("https://i.ibb.co/fNktQjM/military-camo.jpg");
-  background-size: cover;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100vh;
+  background-color: #3b4d3b; /* military green */
+  font-family: "Arial Black", sans-serif;
   color: white;
 }
-
-h1 {
-  margin: 20px;
-  font-size: 30px;
-  text-shadow: 3px 3px 6px black;
-}
-
-#gameCanvas {
+canvas {
+  border: 3px solid black;
   display: block;
-  margin: 0 auto;
-  border: 4px solid #000;
-  border-radius: 10px;
-  background: #87ceeb; /* sky */
 }
-
 #hud {
-  font-size: 18px;
-  font-weight: bold;
   margin-top: 10px;
+  font-size: 18px;
 }

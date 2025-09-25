@@ -149,7 +149,7 @@ function loop() {
 
   // Night cycle handling
   cycleTimer++;
-  if (!nightMode && cycleTimer >= 1800) { // 30s @ 60fps
+  if (!nightMode && cycleTimer >= 3600) { // 60s @ 60fps
     nightMode = true;
     nightTimer = 1200; // 20s
     jets = []; // clear all enemies

@@ -4,13 +4,14 @@ const ctx = canvas.getContext("2d");
 let player, missiles, jets, orangeJets, bombs, score, health, streak, gameOver, explosions;
 let powerUp, dualMode, powerTimer;
 let blackPower, darkMode, blackTimer;
+let greenPower, airSupport, airSupportTimer; // NEW
 let clouds = [];
 
 function init() {
   player = { x: canvas.width / 2, y: canvas.height - 40, width: 40, height: 30 };
   missiles = [];
   jets = [];
-  orangeJets = []; // NEW orange jets
+  orangeJets = [];
   bombs = [];
   explosions = [];
   score = 0;
@@ -25,6 +26,10 @@ function init() {
   blackPower = null;
   darkMode = false;
   blackTimer = 0;
+
+  greenPower = null;       // NEW
+  airSupport = false;      // NEW
+  airSupportTimer = 0;     // NEW
 
   clouds = [];
   for (let i = 0; i < 5; i++) {
@@ -58,11 +63,11 @@ function spawnJet() {
 }
 setInterval(spawnJet, 3000);
 
-// Orange jet spawner (NEW)
+// Orange Jet spawner (comes down vertically)
 function spawnOrangeJet() {
   if (gameOver) return;
   const x = Math.random() * (canvas.width - 60);
-  orangeJets.push({ x, y: 30, width: 50, height: 20, speed: 2 });
+  orangeJets.push({ x, y: 0, width: 50, height: 20, speed: 2 });
 }
 setInterval(spawnOrangeJet, 5000);
 
@@ -88,9 +93,39 @@ function createExplosion(x, y, big = false) {
   explosions.push({ x, y, r: big ? 15 : 5, alpha: 1, grow: big ? 4 : 2 });
 }
 
-// Game loop
+// ===================== GREEN POWER-UP LOGIC =====================
+
+// Spawn green power-up only at 50, 100, 150... points
+function maybeSpawnGreenPower() {
+  if (score > 0 && score % 50 === 0 && !greenPower && !airSupport) {
+    greenPower = { x: Math.random() * (canvas.width - 20), y: 50, r: 12 };
+  }
+}
+
+// Collect green power-up
+function collectGreenPower() {
+  if (!greenPower) return;
+
+  greenPower.y += 2;
+  if (greenPower.y > canvas.height - 50) {
+    greenPower = null;
+    return;
+  }
+
+  if (Math.abs(greenPower.x - player.x) < 25 && Math.abs(greenPower.y - player.y) < 20) {
+    // Trigger Air Support
+    airSupport = true;
+    airSupportTimer = 300; // ~5 seconds at 60fps
+    greenPower = null;
+
+    // Wipe all jets instantly
+    jets = [];
+    orangeJets = [];
+  }
+}
+
+// ===================== MAIN LOOP =====================
 function loop() {
-  // Stop rendering after game over (only final explosion + text)
   if (gameOver) {
     ctx.fillStyle = "rgba(0,0,0,0.5)";
     ctx.fillRect(0, 0, canvas.width, canvas.height);
@@ -136,7 +171,7 @@ function loop() {
     }
   });
 
-  // Orange jets (straight down)
+  // Orange Jets (fall down)
   orangeJets.forEach((jet, i) => {
     jet.y += jet.speed;
     if (jet.y > canvas.height - 50) {
@@ -181,7 +216,7 @@ function loop() {
   if (dualMode && --powerTimer <= 0) dualMode = false;
   if (darkMode && --blackTimer <= 0) darkMode = false;
 
-  // Missile hits normal jets
+  // Missile hits
   missiles.forEach((m, mi) => {
     jets.forEach((jet, ji) => {
       if (m.x > jet.x && m.x < jet.x + jet.width && m.y > jet.y && m.y < jet.y + jet.height) {
@@ -197,10 +232,7 @@ function loop() {
         }
       }
     });
-  });
 
-  // Missile hits orange jets
-  missiles.forEach((m, mi) => {
     orangeJets.forEach((jet, ji) => {
       if (m.x > jet.x && m.x < jet.x + jet.width && m.y > jet.y && m.y < jet.y + jet.height) {
         createExplosion(jet.x + jet.width / 2, jet.y + jet.height / 2);
@@ -273,7 +305,7 @@ function loop() {
     ctx.fillRect(jet.x + 20, jet.y + 20, 10, 10);
   });
 
-  // Orange Jets (NEW)
+  // Orange Jets
   ctx.fillStyle = "orange";
   orangeJets.forEach(jet => {
     ctx.fillRect(jet.x + 15, jet.y, 20, 20);
@@ -305,6 +337,13 @@ function loop() {
     ctx.stroke();
   }
 
+  if (greenPower) {
+    ctx.fillStyle = "lime";
+    ctx.beginPath();
+    ctx.arc(greenPower.x, greenPower.y, greenPower.r, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
   // Explosions
   explosions.forEach((ex, i) => {
     ex.r += ex.grow || 2;
@@ -316,9 +355,27 @@ function loop() {
     ctx.fill();
   });
 
+  // ===================== AIR SUPPORT EFFECT =====================
+  if (airSupport) {
+    ctx.fillStyle = "rgba(0,255,0,0.3)";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    jets = [];
+    orangeJets = [];
+
+    ctx.fillStyle = "green";
+    ctx.font = "bold 30px Arial";
+    ctx.fillText("AIR SUPPORT CALLED!", canvas.width / 2 - 170, canvas.height / 2 - 50);
+
+    airSupportTimer--;
+    if (airSupportTimer <= 0) {
+      airSupport = false;
+    }
+  }
+
   // HUD
   document.getElementById("hud").textContent =
-    `Score: ${score} | Health: ${health} | Streak: ${streak} ${dualMode ? "| BLUE POWER-UP" : ""} ${darkMode ? "| BLACK POWER-UP" : ""}`;
+    `Score: ${score} | Health: ${health} | Streak: ${streak} ${dualMode ? "| BLUE POWER-UP" : ""} ${darkMode ? "| BLACK POWER-UP" : ""} ${airSupport ? "| GREEN POWER-UP" : ""}`;
 
   // Health bar
   ctx.fillStyle = "black";

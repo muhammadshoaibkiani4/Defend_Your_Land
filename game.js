@@ -1,286 +1,274 @@
 const canvas = document.getElementById("gameCanvas");
 const ctx = canvas.getContext("2d");
 
-let player, missiles, jets, bombs, score, health, streak, gameOver, explosions;
-let powerUp, dualMode, powerTimer;
-let blackPower, darkMode, blackTimer;
-let clouds = [];
+canvas.width = 800;
+canvas.height = 600;
 
-function init() {
-  player = { x: canvas.width / 2, y: canvas.height - 40, width: 40, height: 30 };
-  missiles = [];
+// Game State
+let turret, bullets, jets, explosions, clouds, powerups, score, health, gameOver, activePowerups, airSupportActive, airSupportTimer;
+
+// Restart button
+const restartBtn = document.getElementById("restartBtn");
+restartBtn.addEventListener("click", startGame);
+
+// Classes
+class Turret {
+  constructor() {
+    this.x = canvas.width / 2;
+    this.y = canvas.height - 60;
+    this.width = 50;
+    this.height = 60;
+    this.color = "darkgreen";
+    this.fireRate = 500; // ms
+    this.lastShot = 0;
+  }
+  draw() {
+    ctx.fillStyle = this.color;
+    ctx.fillRect(this.x - 20, this.y, 40, 40); // base
+    ctx.fillRect(this.x - 10, this.y - 20, 20, 20); // cannon
+  }
+  shoot() {
+    const now = Date.now();
+    if (now - this.lastShot > this.fireRate) {
+      bullets.push(new Bullet(this.x, this.y - 30));
+      if (activePowerups.includes("doubleTurret")) {
+        bullets.push(new Bullet(this.x - 25, this.y - 30));
+        bullets.push(new Bullet(this.x + 25, this.y - 30));
+      }
+      this.lastShot = now;
+    }
+  }
+}
+
+class Bullet {
+  constructor(x, y) {
+    this.x = x;
+    this.y = y;
+    this.width = 5;
+    this.height = 15;
+    this.color = "yellow";
+  }
+  update() {
+    this.y -= 6;
+  }
+  draw() {
+    ctx.fillStyle = this.color;
+    ctx.fillRect(this.x - 2, this.y, this.width, this.height);
+  }
+}
+
+class Jet {
+  constructor() {
+    this.x = Math.random() * (canvas.width - 60);
+    this.y = -40;
+    this.width = 60;
+    this.height = 30;
+    this.color = "gray";
+    this.speed = 2;
+  }
+  update() {
+    this.y += this.speed;
+    if (this.y > canvas.height) {
+      health--;
+      this.remove = true;
+    }
+  }
+  draw() {
+    ctx.fillStyle = this.color;
+    ctx.fillRect(this.x, this.y, this.width, this.height);
+    ctx.fillStyle = "black";
+    ctx.fillRect(this.x + 20, this.y - 10, 20, 10); // cockpit
+  }
+}
+
+class Explosion {
+  constructor(x, y) {
+    this.x = x;
+    this.y = y;
+    this.radius = 0;
+    this.maxRadius = 30;
+  }
+  update() {
+    this.radius += 2;
+    if (this.radius > this.maxRadius) this.remove = true;
+  }
+  draw() {
+    ctx.beginPath();
+    ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+    ctx.fillStyle = "orange";
+    ctx.fill();
+  }
+}
+
+class Cloud {
+  constructor() {
+    this.x = Math.random() * canvas.width;
+    this.y = Math.random() * 200;
+    this.speed = 0.5;
+  }
+  update() {
+    this.x -= this.speed;
+    if (this.x < -50) this.x = canvas.width + 50;
+  }
+  draw() {
+    ctx.fillStyle = "white";
+    ctx.beginPath();
+    ctx.arc(this.x, this.y, 20, 0, Math.PI * 2);
+    ctx.arc(this.x + 25, this.y, 20, 0, Math.PI * 2);
+    ctx.arc(this.x + 50, this.y, 20, 0, Math.PI * 2);
+    ctx.fill();
+  }
+}
+
+class Powerup {
+  constructor(type) {
+    this.x = Math.random() * (canvas.width - 30);
+    this.y = -30;
+    this.type = type;
+    this.width = 20;
+    this.height = 20;
+  }
+  update() {
+    this.y += 2;
+  }
+  draw() {
+    ctx.fillStyle = this.type === "doubleTurret" ? "yellow" : this.type === "nightMode" ? "black" : "blue";
+    ctx.fillRect(this.x, this.y, this.width, this.height);
+  }
+}
+
+function startGame() {
+  turret = new Turret();
+  bullets = [];
   jets = [];
-  bombs = [];
   explosions = [];
+  clouds = [new Cloud(), new Cloud(), new Cloud()];
+  powerups = [];
   score = 0;
   health = 10;
-  streak = 0;
   gameOver = false;
+  activePowerups = [];
+  airSupportActive = false;
+  airSupportTimer = 0;
+  restartBtn.style.display = "none";
+  animate();
+}
 
-  powerUp = null;
-  dualMode = false;
-  powerTimer = 0;
+function spawnJets() {
+  if (Math.random() < 0.02) jets.push(new Jet());
+}
 
-  blackPower = null;
-  darkMode = false;
-  blackTimer = 0;
-
-  clouds = [];
-  for (let i = 0; i < 5; i++) {
-    clouds.push({ x: Math.random() * canvas.width, y: Math.random() * 200, speed: 0.3 + Math.random() });
+function spawnPowerups() {
+  if (Math.random() < 0.002) {
+    const types = ["doubleTurret", "nightMode", "airSupport"];
+    const type = types[Math.floor(Math.random() * types.length)];
+    powerups.push(new Powerup(type));
   }
 }
 
-init();
+function drawHUD() {
+  ctx.fillStyle = "red";
+  ctx.fillRect(20, 20, health * 20, 20);
+  ctx.strokeStyle = "white";
+  ctx.strokeRect(20, 20, 200, 20);
 
-// Controls
-let keys = {};
-document.addEventListener("keydown", (e) => keys[e.code] = true);
-document.addEventListener("keyup", (e) => keys[e.code] = false);
-
-document.addEventListener("keydown", (e) => {
-  if (e.code === "Space" && !gameOver) {
-    if (dualMode) {
-      missiles.push({ x: player.x - 15, y: player.y, r: 4 });
-      missiles.push({ x: player.x + 15, y: player.y, r: 4 });
-    } else {
-      missiles.push({ x: player.x, y: player.y, r: 4 });
-    }
-  }
-});
-
-// Jet spawner
-function spawnJet() {
-  if (gameOver) return;
-  const x = Math.random() * (canvas.width - 60);
-  jets.push({ x, y: 30, width: 50, height: 20, speed: Math.random() > 0.5 ? 2 : -2, dropped: false });
-}
-setInterval(spawnJet, 3000);
-
-// Power-ups
-function spawnPowerUp() {
-  if (gameOver) return;
-  if (Math.random() < 0.4) {
-    powerUp = { x: Math.random() * (canvas.width - 20), y: 50, r: 10 };
-  }
-}
-setInterval(spawnPowerUp, 12000);
-
-function spawnBlackPowerUp() {
-  if (gameOver) return;
-  if (Math.random() < 0.4) { // more chance now
-    blackPower = { x: Math.random() * (canvas.width - 20), y: 50, r: 12 };
-  }
-}
-setInterval(spawnBlackPowerUp, 18000);
-
-// Explosion animation
-function createExplosion(x, y, big = false) {
-  explosions.push({ x, y, r: big ? 15 : 5, alpha: 1, grow: big ? 4 : 2 });
+  ctx.fillStyle = "white";
+  ctx.font = "20px Courier New";
+  ctx.fillText("Score: " + score, canvas.width - 150, 40);
 }
 
-// Game loop
-function loop() {
-  // Stop rendering after game over (only final explosion + text)
+function gameOverScreen() {
+  explosions.push(new Explosion(turret.x, turret.y));
+  ctx.fillStyle = "red";
+  ctx.font = "40px Courier New";
+  ctx.fillText("GAME OVER", canvas.width / 2 - 120, canvas.height / 2);
+  restartBtn.style.display = "inline-block";
+}
+
+function animate() {
   if (gameOver) {
-    ctx.fillStyle = "rgba(0,0,0,0.5)";
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-    // Exploding turret effect
-    if (explosions.length === 0) {
-      createExplosion(player.x, player.y, true);
-    }
-
-    explosions.forEach((ex, i) => {
-      ex.r += ex.grow;
-      ex.alpha -= 0.05;
-      if (ex.alpha <= 0) explosions.splice(i, 1);
-
-      ctx.fillStyle = `rgba(255,69,0,${ex.alpha})`;
-      ctx.beginPath();
-      ctx.arc(ex.x, ex.y, ex.r, 0, Math.PI * 2);
-      ctx.fill();
-    });
-
-    ctx.fillStyle = "red";
-    ctx.font = "bold 40px Arial";
-    ctx.fillText("GAME OVER", canvas.width / 2 - 120, canvas.height / 2);
+    gameOverScreen();
     return;
   }
 
-  // Player movement
-  if (keys["ArrowLeft"] && player.x > 30) player.x -= 5;
-  if (keys["ArrowRight"] && player.x < canvas.width - 30) player.x += 5;
+  // BG
+  ctx.fillStyle = activePowerups.includes("nightMode") ? "black" : "skyblue";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.fillStyle = activePowerups.includes("nightMode") ? "grey" : "green";
+  ctx.fillRect(0, canvas.height - 100, canvas.width, 100);
 
-  // Missiles
-  missiles.forEach((m, i) => {
-    m.y -= darkMode ? 12 : 6;
-    if (m.y < 0) missiles.splice(i, 1);
-  });
+  clouds.forEach(c => { c.update(); c.draw(); });
 
-  // Jets
-  jets.forEach((jet, i) => {
-    jet.x += jet.speed;
-    if (jet.x < 0 || jet.x + jet.width > canvas.width) jet.speed *= -1;
-    if (!jet.dropped && Math.random() < 0.002) {
-      bombs.push({ x: jet.x + jet.width / 2, y: jet.y + jet.height, r: 5 });
-      jet.dropped = true;
-    }
-  });
+  // Entities
+  turret.draw();
+  bullets.forEach(b => { b.update(); b.draw(); });
+  jets.forEach(j => { j.update(); j.draw(); });
+  explosions.forEach(e => { e.update(); e.draw(); });
+  powerups.forEach(p => { p.update(); p.draw(); });
 
-  // Bombs
-  bombs.forEach((b, i) => {
-    b.y += 4;
-    if (b.y > canvas.height - 50) {
-      bombs.splice(i, 1);
-      health--;
-      streak = 0;
-      if (health <= 0) gameOver = true;
-    }
-  });
-
-  // Power-up collisions
-  if (powerUp) {
-    powerUp.y += 2;
-    if (powerUp.y > canvas.height - 50) powerUp = null;
-    if (Math.abs(powerUp.x - player.x) < 25 && Math.abs(powerUp.y - player.y) < 20) {
-      dualMode = true;
-      powerTimer = 600;
-      powerUp = null;
-    }
-  }
-  if (blackPower) {
-    blackPower.y += 2;
-    if (blackPower.y > canvas.height - 50) blackPower = null;
-    if (Math.abs(blackPower.x - player.x) < 25 && Math.abs(blackPower.y - player.y) < 20) {
-      darkMode = true;
-      blackTimer = 600;
-      blackPower = null;
-    }
-  }
-
-  if (dualMode && --powerTimer <= 0) dualMode = false;
-  if (darkMode && --blackTimer <= 0) darkMode = false;
-
-  // Missile hits
-  missiles.forEach((m, mi) => {
-    jets.forEach((jet, ji) => {
-      if (m.x > jet.x && m.x < jet.x + jet.width && m.y > jet.y && m.y < jet.y + jet.height) {
-        createExplosion(jet.x + jet.width / 2, jet.y + jet.height / 2);
-        jets.splice(ji, 1);
-        missiles.splice(mi, 1);
+  // Collisions
+  bullets.forEach(b => {
+    jets.forEach(j => {
+      if (b.x < j.x + j.width && b.x + b.width > j.x && b.y < j.y + j.height && b.y + b.height > j.y) {
+        j.remove = true;
+        b.remove = true;
+        explosions.push(new Explosion(j.x + j.width / 2, j.y + j.height / 2));
         score++;
-        streak++;
-        if (streak >= 5) {
-          jets = [];
-          streak = 0;
-        }
       }
     });
   });
 
-  // Bomb hits
-  bombs.forEach((b, bi) => {
-    if (b.x > player.x - 20 && b.x < player.x + 20 && b.y > player.y - 20 && b.y < player.y + 20) {
-      bombs.splice(bi, 1);
-      health--;
-      streak = 0;
-      if (health <= 0) gameOver = true;
+  powerups.forEach(p => {
+    if (turret.x < p.x + p.width && turret.x + turret.width > p.x && turret.y < p.y + p.height && turret.y + turret.height > p.y) {
+      if (p.type === "doubleTurret") {
+        activePowerups.push("doubleTurret");
+        setTimeout(() => activePowerups = activePowerups.filter(a => a !== "doubleTurret"), 10000);
+      } else if (p.type === "nightMode") {
+        activePowerups.push("nightMode");
+        turret.fireRate = 250;
+        setTimeout(() => {
+          activePowerups = activePowerups.filter(a => a !== "nightMode");
+          turret.fireRate = 500;
+        }, 10000);
+      } else if (p.type === "airSupport") {
+        airSupportActive = true;
+        airSupportTimer = Date.now();
+      }
+      p.remove = true;
     }
   });
 
-  // Background
-  ctx.fillStyle = darkMode ? "black" : "skyblue";
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
-  ctx.fillStyle = darkMode ? "grey" : "green";
-  ctx.fillRect(0, canvas.height - 50, canvas.width, 50);
-
-  // Title
-  ctx.fillStyle = "white";
-  ctx.font = "bold 28px Arial";
-  ctx.fillText("DEFEND YOUR LAND", canvas.width / 2 - 150, 40);
-
-  // Clouds
-  if (!darkMode) {
-    ctx.fillStyle = "white";
-    clouds.forEach(cloud => {
-      ctx.beginPath();
-      ctx.arc(cloud.x, cloud.y, 20, 0, Math.PI * 2);
-      ctx.arc(cloud.x + 25, cloud.y + 10, 25, 0, Math.PI * 2);
-      ctx.arc(cloud.x - 25, cloud.y + 10, 25, 0, Math.PI * 2);
-      ctx.fill();
-      cloud.x += cloud.speed;
-      if (cloud.x > canvas.width + 50) cloud.x = -50;
-    });
+  if (airSupportActive) {
+    jets.forEach(j => { j.remove = true; explosions.push(new Explosion(j.x, j.y)); });
+    ctx.fillStyle = "lightgreen";
+    ctx.fillText("AIR SUPPORT ACTIVE!", canvas.width / 2 - 100, 80);
+    if (Date.now() - airSupportTimer > 5000) airSupportActive = false;
   }
 
-  // Turret
-  ctx.fillStyle = darkMode ? "red" : "darkgreen";
-  ctx.fillRect(player.x - 15, player.y, 30, 20); // base
-  ctx.fillRect(player.x - 5, player.y - 15, 10, 15); // barrel
+  // Clean up
+  bullets = bullets.filter(b => !b.remove && b.y > 0);
+  jets = jets.filter(j => !j.remove);
+  explosions = explosions.filter(e => !e.remove);
+  powerups = powerups.filter(p => !p.remove);
 
-  // Missiles
-  ctx.fillStyle = "red";
-  missiles.forEach(m => {
-    ctx.beginPath();
-    ctx.arc(m.x, m.y, m.r, 0, Math.PI * 2);
-    ctx.fill();
-  });
+  // Spawn
+  spawnJets();
+  spawnPowerups();
 
-  // Jets
-  ctx.fillStyle = darkMode ? "red" : "gray";
-  jets.forEach(jet => {
-    ctx.fillRect(jet.x + 15, jet.y, 20, 20);
-    ctx.fillRect(jet.x, jet.y + 5, 50, 5);
-    ctx.fillRect(jet.x + 20, jet.y + 20, 10, 10);
-  });
+  drawHUD();
 
-  // Bombs
-  ctx.fillStyle = "black";
-  bombs.forEach(b => {
-    ctx.beginPath();
-    ctx.arc(b.x, b.y, b.r, 0, Math.PI * 2);
-    ctx.fill();
-  });
-
-  // Power-ups
-  if (powerUp) {
-    ctx.fillStyle = "blue";
-    ctx.beginPath();
-    ctx.arc(powerUp.x, powerUp.y, powerUp.r, 0, Math.PI * 2);
-    ctx.fill();
+  if (health <= 0) {
+    gameOver = true;
+  } else {
+    requestAnimationFrame(animate);
   }
-  if (blackPower) {
-    ctx.fillStyle = "black";
-    ctx.beginPath();
-    ctx.arc(blackPower.x, blackPower.y, blackPower.r, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.strokeStyle = "white";
-    ctx.stroke();
-  }
-
-  // Explosions
-  explosions.forEach((ex, i) => {
-    ex.r += ex.grow || 2;
-    ex.alpha -= 0.05;
-    if (ex.alpha <= 0) explosions.splice(i, 1);
-    ctx.fillStyle = `rgba(255,165,0,${ex.alpha})`;
-    ctx.beginPath();
-    ctx.arc(ex.x, ex.y, ex.r, 0, Math.PI * 2);
-    ctx.fill();
-  });
-
-  // HUD
-  document.getElementById("hud").textContent =
-    `Score: ${score} | Health: ${health} | Streak: ${streak} ${dualMode ? "| BLUE POWER-UP" : ""} ${darkMode ? "| BLACK POWER-UP" : ""}`;
-
-  // Health bar
-  ctx.fillStyle = "black";
-  ctx.fillRect(20, 20, 104, 14);
-  ctx.fillStyle = "limegreen";
-  ctx.fillRect(22, 22, health * 10, 10);
-
-  requestAnimationFrame(loop);
 }
 
-loop();
+// Controls
+window.addEventListener("keydown", e => {
+  if (e.code === "ArrowLeft" && turret.x > 40) turret.x -= 20;
+  if (e.code === "ArrowRight" && turret.x < canvas.width - 40) turret.x += 20;
+  if (e.code === "Space") turret.shoot();
+});
+
+startGame();

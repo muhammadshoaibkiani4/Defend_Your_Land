@@ -59,6 +59,13 @@ function activatePowerUp(type) {
 function drawTurret() {
     ctx.fillStyle = turret.color;
     ctx.fillRect(turret.x, turret.y, turret.width, turret.height);
+
+    // Flash pink during night
+    if (nightMode) {
+        ctx.strokeStyle = "pink";
+        ctx.lineWidth = 4;
+        ctx.strokeRect(turret.x, turret.y, turret.width, turret.height);
+    }
 }
 
 function drawBullets() {

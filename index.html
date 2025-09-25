@@ -10,9 +10,10 @@
       font-family: Arial, sans-serif;
       display: flex;
       justify-content: center;
-      align-items: flex-start;
-      gap: 20px;
-      padding: 20px;
+      align-items: center; /* Center vertically */
+      gap: 40px;
+      height: 100vh;
+      margin: 0;
     }
     #instructions {
       max-width: 220px;
@@ -25,12 +26,19 @@
     #gameCanvas {
       border: 2px solid white;
       background: skyblue;
+      display: block;
+      margin: auto;
     }
     #hud {
       margin-top: 10px;
       font-size: 18px;
       font-weight: bold;
       text-align: center;
+    }
+    .game-container {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
     }
   </style>
 </head>
@@ -46,7 +54,7 @@
   </div>
 
   <!-- Game canvas -->
-  <div>
+  <div class="game-container">
     <canvas id="gameCanvas" width="600" height="400"></canvas>
     <div id="hud">Score: 0</div>
   </div>

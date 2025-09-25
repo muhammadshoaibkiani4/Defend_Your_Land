@@ -7,6 +7,11 @@ let blackPower, darkMode, blackTimer;
 let greenPower, airSupportActive, airSupportTimer;
 let clouds = [];
 
+// Night cycle vars
+let nightMode = false;
+let nightTimer = 0;
+let cycleTimer = 0;
+
 function init() {
   player = { x: canvas.width / 2, y: canvas.height - 40, width: 40, height: 30 };
   missiles = [];
@@ -29,6 +34,10 @@ function init() {
   airSupportActive = false;
   airSupportTimer = 0;
 
+  nightMode = false;
+  nightTimer = 0;
+  cycleTimer = 0;
+
   clouds = [];
   for (let i = 0; i < 5; i++) {
     clouds.push({ x: Math.random() * canvas.width, y: Math.random() * 200, speed: 0.3 + Math.random() });
@@ -43,7 +52,7 @@ document.addEventListener("keydown", (e) => keys[e.code] = true);
 document.addEventListener("keyup", (e) => keys[e.code] = false);
 
 document.addEventListener("keydown", (e) => {
-  if (e.code === "Space" && !gameOver) {
+  if (e.code === "Space" && !gameOver && !nightMode) {
     if (dualMode) {
       missiles.push({ x: player.x - 15, y: player.y, r: 4 });
       missiles.push({ x: player.x + 15, y: player.y, r: 4 });
@@ -55,7 +64,7 @@ document.addEventListener("keydown", (e) => {
 
 // Jet spawner
 function spawnJet() {
-  if (gameOver) return;
+  if (gameOver || nightMode) return; // no jets at night
   const x = Math.random() * (canvas.width - 60);
   jets.push({ x, y: 30, width: 50, height: 20, speed: Math.random() > 0.5 ? 2 : -2, dropped: false });
 }
@@ -63,7 +72,7 @@ setInterval(spawnJet, 3000);
 
 // Power-ups
 function spawnPowerUp() {
-  if (gameOver) return;
+  if (gameOver || nightMode) return;
   if (Math.random() < 0.4) {
     powerUp = { x: Math.random() * (canvas.width - 20), y: 50, r: 10 };
   }
@@ -71,7 +80,7 @@ function spawnPowerUp() {
 setInterval(spawnPowerUp, 12000);
 
 function spawnBlackPowerUp() {
-  if (gameOver) return;
+  if (gameOver || nightMode) return;
   if (Math.random() < 0.4) {
     blackPower = { x: Math.random() * (canvas.width - 20), y: 50, r: 12 };
   }
@@ -80,7 +89,7 @@ setInterval(spawnBlackPowerUp, 18000);
 
 // Air support (green power-up at 50 points)
 function checkGreenPowerUp() {
-  if (!greenPower && score > 0 && score % 50 === 0) {
+  if (!greenPower && score > 0 && score % 50 === 0 && !nightMode) {
     greenPower = { x: Math.random() * (canvas.width - 20), y: 50, r: 12 };
   }
 }
@@ -100,7 +109,7 @@ function spawnBomber() {
 }
 
 function checkBomberSpawn() {
-  if (score > 0 && score % 20 === 0) {
+  if (score > 0 && score % 20 === 0 && !nightMode) {
     let already = jets.some(j => j.bomber);
     if (!already) spawnBomber();
   }
@@ -138,6 +147,24 @@ function loop() {
     return;
   }
 
+  // Night cycle handling
+  cycleTimer++;
+  if (!nightMode && cycleTimer >= 1800) { // 30s @ 60fps
+    nightMode = true;
+    nightTimer = 1200; // 20s
+    jets = []; // clear all enemies
+  }
+  if (nightMode) {
+    nightTimer--;
+    if (nightTimer <= 0) {
+      nightMode = false;
+      cycleTimer = 0;
+    } else {
+      // heal player slowly during night
+      if (health < 10 && nightTimer % 60 === 0) health++;
+    }
+  }
+
   // Player movement
   if (keys["ArrowLeft"] && player.x > 30) player.x -= 5;
   if (keys["ArrowRight"] && player.x < canvas.width - 30) player.x += 5;
@@ -149,22 +176,24 @@ function loop() {
   });
 
   // Jets
-  jets.forEach((jet, i) => {
-    if (jet.bomber) {
-      jet.x += 2;
-      jet.bombTimer++;
-      if (jet.bombTimer % 50 === 0 && jet.x > 0 && jet.x < canvas.width - jet.width) {
-        bombs.push({ x: jet.x + jet.width / 2, y: jet.y + jet.height, r: 7 });
+  if (!nightMode) {
+    jets.forEach((jet, i) => {
+      if (jet.bomber) {
+        jet.x += 2;
+        jet.bombTimer++;
+        if (jet.bombTimer % 50 === 0 && jet.x > 0 && jet.x < canvas.width - jet.width) {
+          bombs.push({ x: jet.x + jet.width / 2, y: jet.y + jet.height, r: 7 });
+        }
+      } else {
+        jet.x += jet.speed;
+        if (jet.x < 0 || jet.x + jet.width > canvas.width) jet.speed *= -1;
+        if (!jet.dropped && Math.random() < 0.002) {
+          bombs.push({ x: jet.x + jet.width / 2, y: jet.y + jet.height, r: 5 });
+          jet.dropped = true;
+        }
       }
-    } else {
-      jet.x += jet.speed;
-      if (jet.x < 0 || jet.x + jet.width > canvas.width) jet.speed *= -1;
-      if (!jet.dropped && Math.random() < 0.002) {
-        bombs.push({ x: jet.x + jet.width / 2, y: jet.y + jet.height, r: 5 });
-        jet.dropped = true;
-      }
-    }
-  });
+    });
+  }
 
   // Bombs
   bombs.forEach((b, i) => {
@@ -176,7 +205,7 @@ function loop() {
     }
   });
 
-  // Power-up collisions
+  // Power-ups (FIXED: disappear if they hit ground)
   if (powerUp) {
     powerUp.y += 2;
     if (powerUp.y > canvas.height - 50) powerUp = null;
@@ -202,7 +231,7 @@ function loop() {
       airSupportActive = true;
       airSupportTimer = 300;
       greenPower = null;
-      jets = []; // all jets destroyed instantly
+      jets = [];
     }
   }
 
@@ -232,13 +261,23 @@ function loop() {
   });
 
   // Background
-  ctx.fillStyle = darkMode ? "black" : "skyblue";
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
-  ctx.fillStyle = darkMode ? "grey" : "green";
-  ctx.fillRect(0, canvas.height - 50, canvas.width, 50);
+  if (nightMode) {
+    ctx.fillStyle = "black";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    // stars
+    for (let i = 0; i < 40; i++) {
+      ctx.fillStyle = "white";
+      ctx.fillRect(Math.random() * canvas.width, Math.random() * canvas.height / 2, 2, 2);
+    }
+  } else {
+    ctx.fillStyle = darkMode ? "black" : "skyblue";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.fillStyle = darkMode ? "grey" : "green";
+    ctx.fillRect(0, canvas.height - 50, canvas.width, 50);
+  }
 
   // Clouds
-  if (!darkMode) {
+  if (!darkMode && !nightMode) {
     ctx.fillStyle = "white";
     clouds.forEach(cloud => {
       ctx.beginPath();
@@ -252,7 +291,7 @@ function loop() {
   }
 
   // Turret
-  ctx.fillStyle = darkMode ? "red" : "darkgreen";
+  ctx.fillStyle = darkMode ? "red" : (nightMode ? "pink" : "darkgreen");
   ctx.fillRect(player.x - 15, player.y, 30, 20);
   ctx.fillRect(player.x - 5, player.y - 15, 10, 15);
 
@@ -324,6 +363,13 @@ function loop() {
   // HUD
   document.getElementById("hud").textContent =
     `Score: ${score} | Health: ${health} ${dualMode ? "| BLUE POWER-UP" : ""} ${darkMode ? "| BLACK POWER-UP" : ""} ${airSupportActive ? "| AIR SUPPORT!" : ""}`;
+
+  // Night message
+  if (nightMode) {
+    ctx.fillStyle = "pink";
+    ctx.font = "bold 30px Arial";
+    ctx.fillText("Rest yourself...", canvas.width / 2 - 100, canvas.height / 2);
+  }
 
   // Health bar
   ctx.fillStyle = "black";

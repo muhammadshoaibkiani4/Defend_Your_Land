@@ -5,58 +5,69 @@
   <title>Defend Your Land</title>
   <style>
     body {
+      margin: 0;
       background: #222;
       color: white;
       font-family: Arial, sans-serif;
       display: flex;
-      justify-content: center;
-      align-items: center; /* Center vertically */
-      gap: 40px;
-      height: 100vh;
-      margin: 0;
-    }
-    #instructions {
-      max-width: 220px;
-      font-size: 16px;
-      line-height: 1.5;
-      background: rgba(0,0,0,0.6);
-      padding: 12px;
-      border-radius: 8px;
-    }
-    #gameCanvas {
-      border: 2px solid white;
-      background: skyblue;
-      display: block;
-      margin: auto;
-    }
-    #hud {
-      margin-top: 10px;
-      font-size: 18px;
-      font-weight: bold;
-      text-align: center;
-    }
-    .game-container {
-      display: flex;
       flex-direction: column;
       align-items: center;
+    }
+
+    header {
+      margin: 20px 0;
+      text-align: center;
+    }
+
+    .container {
+      display: flex;
+      justify-content: center;
+      width: 100%;
+    }
+
+    .instructions {
+      flex: 0 0 250px; /* fixed width for instruction panel */
+      padding: 20px;
+      text-align: left;
+      font-size: 16px;
+      line-height: 1.6;
+    }
+
+    .game-area {
+      flex-grow: 1;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
+
+    canvas {
+      border: 3px solid white;
+      background: #000;
     }
   </style>
 </head>
 <body>
-  <!-- Instructions on the left -->
-  <div id="instructions">
-    <h2>Instructions</h2>
-    <ul>
-      <li>Press <b>SPACE</b> to shoot</li>
-      <li>Use <b>LEFT / RIGHT</b> arrows to move</li>
-      <li>Collect power-ups</li>
-    </ul>
-  </div>
+  <header>
+    <h1>Defend Your Land</h1>
+  </header>
 
-  <!-- Game canvas -->
-  <div class="game-container">
-    <canvas id="gameCanvas" width="600" height="400"></canvas>
-    <div id="hud">Score: 0</div>
+  <div class="container">
+    <!-- Instructions extreme left -->
+    <div class="instructions">
+      <h2>Instructions</h2>
+      <ul>
+        <li>Press <b>Space</b> to shoot</li>
+        <li>Use <b>Arrow Keys</b> to move</li>
+        <li>Collect power-ups for abilities</li>
+        <li>Night arrives every 60s – heal & rest</li>
+        <li>Every 20 points: Support turret arrives</li>
+      </ul>
+    </div>
+
+    <!-- Game canvas centered -->
+    <div class="game-area">
+      <canvas id="gameCanvas" width="800" height="500"></canvas>
+    </div>
   </div>
 
   <script src="game.js"></script>

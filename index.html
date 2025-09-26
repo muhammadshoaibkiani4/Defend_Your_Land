@@ -6,7 +6,8 @@
   <style>
     body {
       margin: 0;
-      background: #222;
+      padding: 0;
+      background: #111;
       color: white;
       font-family: Arial, sans-serif;
       display: flex;
@@ -15,60 +16,69 @@
     }
 
     header {
-      margin: 20px 0;
+      margin: 20px;
+      font-size: 32px;
+      font-weight: bold;
       text-align: center;
+      color: crimson;
     }
 
-    .container {
+    main {
       display: flex;
       justify-content: center;
+      align-items: flex-start;
       width: 100%;
+      max-width: 1200px;
     }
 
-    .instructions {
-      flex: 0 0 250px; /* fixed width for instruction panel */
+    #instructions {
+      flex: 1;
       padding: 20px;
-      text-align: left;
-      font-size: 16px;
+      font-size: 18px;
       line-height: 1.6;
     }
 
-    .game-area {
-      flex-grow: 1;
+    #gameArea {
+      flex: 2;
       display: flex;
-      justify-content: center;
+      flex-direction: column;
       align-items: center;
     }
 
-    canvas {
-      border: 3px solid white;
-      background: #000;
+    #gameCanvas {
+      background: skyblue;
+      border: 4px solid black;
+      display: block;
+    }
+
+    #hud {
+      margin-top: 10px;
+      font-size: 20px;
+      color: yellow;
+      font-weight: bold;
     }
   </style>
 </head>
 <body>
-  <header>
-    <h1>Defend Your Land</h1>
-  </header>
+  <header>Defend Your Land</header>
 
-  <div class="container">
-    <!-- Instructions extreme left -->
-    <div class="instructions">
+  <main>
+    <aside id="instructions">
       <h2>Instructions</h2>
-      <ul>
-        <li>Press <b>Space</b> to shoot</li>
-        <li>Use <b>Arrow Keys</b> to move</li>
-        <li>Collect power-ups for abilities</li>
-        <li>Night arrives every 60s – heal & rest</li>
-        <li>Every 20 points: Support turret arrives</li>
-      </ul>
-    </div>
+      <p>➡️ Use <b>Arrow Keys</b> to move</p>
+      <p>🔫 Press <b>Space</b> to shoot</p>
+      <p>✨ Collect power-ups for abilities</p>
+      <p>🟠 Orange Jets fall straight down</p>
+      <p>💣 Avoid bombs from enemy jets</p>
+      <p>💚 Special green power-up spawns another turret</p>
+      <p>🌙 Night cycle heals your base</p>
+    </aside>
 
-    <!-- Game canvas centered -->
-    <div class="game-area">
-      <canvas id="gameCanvas" width="800" height="500"></canvas>
+    <div id="gameArea">
+      <canvas id="gameCanvas" width="800" height="600"></canvas>
+      <div id="hud">Score: 0 | Health: 10</div>
     </div>
-  </div>
+  </main>
 
   <script src="game.js"></script>
 </body>

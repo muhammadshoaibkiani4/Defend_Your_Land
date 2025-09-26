@@ -1,410 +1,390 @@
+// game.js — timestamp-based timing
 const canvas = document.getElementById("gameCanvas");
 const ctx = canvas.getContext("2d");
 
-let player, missiles, jets, bombs, score, health, gameOver, explosions;
-let powerUp, dualMode, powerTimer;
-let blackPower, darkMode, blackTimer;
-let greenPower;
-let shieldPower, shieldActive, shieldTimer;
-let clouds = [];
-let stars = [];
-let moon = { x: 80, y: 80, r: 40 };
-let giantJet = null;
+// --- State ---
+let keys = {};
+let bullets = [];
+let jets = [];
+let bombs = [];
+let explosions = [];
+let powerUps = []; // unified active power-ups list (only one spawn at a time)
+let score = 0;
+let gameOver = false;
+let turretHealth = 10;
 
+let darkMode = false;   
+let darkTimer = 0;
+
+let shieldActive = false;
+let shieldTimer = 0;
+
+let nightMode = false;
+let nightStartTime = 0;
+let lastNight = Date.now();
+
+let stars = [];
+let moon = { x: 80, y: 80, r: 30 };
+
+let giantJet = null;
+let giantTriggered = false;
+
+let supportActive = false;
+let supportTimer = 0;
+let supportBullets = [];
+let supportFireCounter = 0;
+
+let dualMode = false;
+let dualTimer = 0;
+
+let lastSupportScore = 0;
+
+// Player turret
+const turret = {
+  x: canvas.width / 2 - 15,
+  y: canvas.height - 40,
+  width: 30,
+  height: 30,
+  color: "darkgreen",
+};
+
+// --- Init ---
 function init() {
-  player = { x: canvas.width / 2, y: canvas.height - 40, width: 40, height: 30 };
-  missiles = [];
+  bullets = [];
   jets = [];
   bombs = [];
   explosions = [];
+  powerUps = [];
   score = 0;
-  health = 10;
   gameOver = false;
+  turretHealth = 10;
 
-  powerUp = null;
-  dualMode = false;
-  powerTimer = 0;
-
-  blackPower = null;
   darkMode = false;
-  blackTimer = 0;
+  darkTimer = 0;
 
-  greenPower = null;
-
-  shieldPower = null;
   shieldActive = false;
   shieldTimer = 0;
 
-  clouds = [];
-  for (let i = 0; i < 5; i++) {
-    clouds.push({ x: Math.random() * canvas.width, y: Math.random() * 200, speed: 0.3 + Math.random() });
-  }
+  nightMode = false;
+  nightStartTime = 0;
+  lastNight = Date.now();
 
   stars = [];
-  for (let i = 0; i < 80; i++) {
-    stars.push({ x: Math.random() * canvas.width, y: Math.random() * 200, r: Math.random() * 2 });
+  for (let i = 0; i < 60; i++) {
+    stars.push({ x: Math.random() * canvas.width, y: Math.random() * (canvas.height * 0.45), r: Math.random() * 2 + 1 });
+  }
+
+  giantJet = null;
+  giantTriggered = false;
+
+  supportActive = false;
+  supportTimer = 0;
+  supportBullets = [];
+  supportFireCounter = 0;
+
+  dualMode = false;
+  dualTimer = 0;
+
+  lastSupportScore = 0;
+}
+init();
+
+// --- Input ---
+document.addEventListener("keydown", (e) => { keys[e.code] = true; if (e.code === "Space") firePlayer(); });
+document.addEventListener("keyup", (e) => { keys[e.code] = false; });
+
+// --- Shooting ---
+function firePlayer() {
+  if (gameOver || nightMode) return;
+  if (dualMode) {
+    bullets.push({ x: turret.x + 5, y: turret.y, r: 4, speed: 6 });
+    bullets.push({ x: turret.x + turret.width - 5, y: turret.y, r: 4, speed: 6 });
+  } else {
+    bullets.push({ x: turret.x + turret.width / 2, y: turret.y, r: 4, speed: 6 });
   }
 }
 
-init();
-
-// Controls
-let keys = {};
-document.addEventListener("keydown", (e) => keys[e.code] = true);
-document.addEventListener("keyup", (e) => keys[e.code] = false);
-
-document.addEventListener("keydown", (e) => {
-  if (e.code === "Space" && !gameOver) {
-    if (dualMode) {
-      missiles.push({ x: player.x - 15, y: player.y, r: 4 });
-      missiles.push({ x: player.x + 15, y: player.y, r: 4 });
-    } else {
-      missiles.push({ x: player.x, y: player.y, r: 4 });
-    }
-  }
-});
-
-// Jet spawner
+// --- Spawners ---
 function spawnJet() {
-  if (gameOver) return;
-  const x = Math.random() * (canvas.width - 60);
-  const type = Math.random();
-  if (type < 0.7) {
+  if (gameOver || nightMode) return;
+  const t = Math.random();
+  if (t < 0.7) {
+    const x = Math.random() * (canvas.width - 60);
     jets.push({ x, y: 30, width: 50, height: 20, speed: Math.random() > 0.5 ? 2 : -2, dropped: false });
   } else {
-    // Orange jet
-    jets.push({ x: Math.random() * (canvas.width - 40), y: -30, width: 40, height: 20, color: "orange", vertical: true });
+    const x = Math.random() * (canvas.width - 40);
+    jets.push({ x, y: -30, width: 40, height: 20, color: "orange", vertical: true, speed: 3 });
   }
 }
 setInterval(spawnJet, 3000);
 
-// Power-ups
-function spawnPowerUp() {
-  if (gameOver) return;
-  if (Math.random() < 0.4 && !powerUp) {
-    powerUp = { x: Math.random() * (canvas.width - 20), y: 50, r: 10 };
-  }
-}
-setInterval(spawnPowerUp, 12000);
-
-function spawnBlackPowerUp() {
-  if (gameOver) return;
-  if (Math.random() < 0.4 && !blackPower) {
-    blackPower = { x: Math.random() * (canvas.width - 20), y: 50, r: 12 };
-  }
-}
-setInterval(spawnBlackPowerUp, 18000);
-
-function spawnShieldPowerUp() {
-  if (gameOver) return;
-  if (Math.random() < 0.3 && !shieldPower) {
-    shieldPower = { x: Math.random() * (canvas.width - 20), y: 50, r: 12 };
-  }
-}
-setInterval(spawnShieldPowerUp, 20000);
-
-// Bomber
 function spawnBomber() {
-  jets.push({
-    x: -80,
-    y: 80,
-    width: 80,
-    height: 40,
-    color: "crimson",
-    bomber: true,
-    bombTimer: 0
-  });
+  if (gameOver || nightMode) return;
+  jets.push({ x: -80, y: 80, width: 80, height: 40, color: "crimson", bomber: true, bombTimer: 0 });
 }
 
-function checkBomberSpawn() {
-  if (score > 0 && score % 20 === 0) {
-    let already = jets.some(j => j.bomber);
-    if (!already) spawnBomber();
-  }
-}
-
-// Giant Jet
 function spawnGiantJet() {
-  giantJet = { x: canvas.width + 200, y: 120, width: 200, height: 80, speed: -6 };
+  if (gameOver || nightMode) return;
+  giantJet = { x: canvas.width + 200, y: 110, width: 200, height: 80, speed: -6 };
 }
 
-function checkGiantJet() {
-  if (score > 0 && score % 50 === 0 && !giantJet) {
-    spawnGiantJet();
-  }
+function trySpawnRegularPowerUp() {
+  if (gameOver || nightMode) return;
+  if (powerUps.length > 0) return;
+  const r = Math.random();
+  if (r < 0.35) powerUps.push({ type: "dual", x: Math.random() * (canvas.width - 40), y: 50, r: 10, color: "blue" });
+  else if (r < 0.7) powerUps.push({ type: "black", x: Math.random() * (canvas.width - 40), y: 50, r: 12, color: "black" });
+  else powerUps.push({ type: "shield", x: Math.random() * (canvas.width - 40), y: 50, r: 12, color: "gold" });
+}
+setInterval(trySpawnRegularPowerUp, 12000);
+
+function spawnSpecialGreen() {
+  if (gameOver || nightMode) return;
+  if (powerUps.length > 0) return;
+  powerUps.push({ type: "support", x: Math.random() * (canvas.width - 40), y: 50, r: 12, color: "limegreen" });
 }
 
-// Explosion
+// --- Explosions ---
 function createExplosion(x, y, big = false) {
-  explosions.push({ x, y, r: big ? 15 : 5, alpha: 1, grow: big ? 4 : 2 });
+  explosions.push({ x, y, r: big ? 15 : 6, alpha: 1, grow: big ? 3 : 2 });
 }
 
-// Loop
+// --- Game loop ---
 function loop() {
   if (gameOver) {
-    ctx.fillStyle = "rgba(0,0,0,0.5)";
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-    if (explosions.length === 0) {
-      createExplosion(player.x, player.y, true);
-    }
-
-    explosions.forEach((ex, i) => {
-      ex.r += ex.grow;
-      ex.alpha -= 0.05;
-      if (ex.alpha <= 0) explosions.splice(i, 1);
-
-      ctx.fillStyle = `rgba(255,69,0,${ex.alpha})`;
-      ctx.beginPath();
-      ctx.arc(ex.x, ex.y, ex.r, 0, Math.PI * 2);
-      ctx.fill();
-    });
-
-    ctx.fillStyle = "red";
-    ctx.font = "bold 40px Arial";
-    ctx.fillText("GAME OVER", canvas.width / 2 - 120, canvas.height / 2);
+    drawGameOver();
     return;
   }
 
-  // Player movement
-  if (keys["ArrowLeft"] && player.x > 30) player.x -= 5;
-  if (keys["ArrowRight"] && player.x < canvas.width - 30) player.x += 5;
+  const now = Date.now();
 
-  // Missiles
-  missiles.forEach((m, i) => {
-    m.y -= darkMode ? 12 : 6;
-    if (m.y < 0) missiles.splice(i, 1);
-  });
+  // Night cycle: every 60s
+  if (!nightMode && now - lastNight >= 60000) {
+    nightMode = true;
+    nightStartTime = now;
+    lastNight = now;
+    jets = [];
+    bombs = [];
+    powerUps = [];
+    turretHealth = Math.min(10, turretHealth + 1);
+  }
+  if (nightMode && now - nightStartTime >= 10000) {
+    nightMode = false;
+  }
+
+  // Heal every second during night
+  if (nightMode && (now - nightStartTime) % 1000 < 16) {
+    turretHealth = Math.min(10, turretHealth + 1);
+  }
+
+  // Movement
+  if (keys["ArrowLeft"] && turret.x > 0) turret.x -= 5;
+  if (keys["ArrowRight"] && turret.x < canvas.width - turret.width) turret.x += 5;
+
+  // Support turret bullets
+  if (supportActive) {
+    supportFireCounter++;
+    if (supportFireCounter % 12 === 0) {
+      supportBullets.push({ x: turret.x - 20, y: turret.y + 10, r: 3, speed: 5 });
+      supportBullets.push({ x: turret.x + turret.width + 20, y: turret.y + 10, r: 3, speed: 5 });
+    }
+    supportTimer--;
+    if (supportTimer <= 0) supportActive = false;
+  }
+
+  // Bullets
+  bullets.forEach(b => b.y -= b.speed);
+  bullets = bullets.filter(b => b.y > 0);
+  supportBullets.forEach(b => b.y -= b.speed);
+  supportBullets = supportBullets.filter(b => b.y > 0);
 
   // Jets
-  jets.forEach((jet, i) => {
+  jets.forEach(jet => {
     if (jet.bomber) {
       jet.x += 2;
       jet.bombTimer++;
-      if (jet.bombTimer % 50 === 0 && jet.x > 0 && jet.x < canvas.width - jet.width) {
+      if (jet.bombTimer % 50 === 0) {
         bombs.push({ x: jet.x + jet.width / 2, y: jet.y + jet.height, r: 7 });
       }
     } else if (jet.vertical) {
-      jet.y += 3;
-      if (jet.y > canvas.height - 50) jets.splice(i, 1);
+      jet.y += jet.speed;
     } else {
       jet.x += jet.speed;
-      if (jet.x < 0 || jet.x + jet.width > canvas.width) jet.speed *= -1;
       if (!jet.dropped && Math.random() < 0.002) {
         bombs.push({ x: jet.x + jet.width / 2, y: jet.y + jet.height, r: 5 });
         jet.dropped = true;
       }
     }
   });
+  jets = jets.filter(jet => !(jet.x < -120 || jet.x > canvas.width + 120 || jet.y > canvas.height + 50));
 
-  // Bombs
-  bombs.forEach((b, i) => {
-    b.y += 4;
-    if (b.y > canvas.height - 50) {
-      bombs.splice(i, 1);
-      if (!shieldActive) {
-        health--;
-        if (health <= 0) gameOver = true;
-      }
-    }
-  });
-
-  // Power-up collisions
-  if (powerUp) {
-    powerUp.y += 2;
-    if (powerUp.y > canvas.height - 50) powerUp = null;
-    if (Math.abs(powerUp.x - player.x) < 25 && Math.abs(powerUp.y - player.y) < 20) {
-      dualMode = true;
-      powerTimer = 600;
-      powerUp = null;
-    }
-  }
-  if (blackPower) {
-    blackPower.y += 2;
-    if (blackPower.y > canvas.height - 50) blackPower = null;
-    if (Math.abs(blackPower.x - player.x) < 25 && Math.abs(blackPower.y - player.y) < 20) {
-      darkMode = true;
-      blackTimer = 600;
-      blackPower = null;
-    }
-  }
-  if (shieldPower) {
-    shieldPower.y += 2;
-    if (shieldPower.y > canvas.height - 50) shieldPower = null;
-    if (Math.abs(shieldPower.x - player.x) < 25 && Math.abs(shieldPower.y - player.y) < 20) {
-      shieldActive = true;
-      shieldTimer = 600;
-      shieldPower = null;
-    }
-  }
-
-  if (dualMode && --powerTimer <= 0) dualMode = false;
-  if (darkMode && --blackTimer <= 0) darkMode = false;
-  if (shieldActive && --shieldTimer <= 0) shieldActive = false;
-
-  // Giant Jet
+  // Giant jet
   if (giantJet) {
     giantJet.x += giantJet.speed;
-    jets = []; // kills all jets
-    if (giantJet.x + giantJet.width < 0) giantJet = null;
+    jets = [];
+    if (giantJet.x + giantJet.width < -50) giantJet = null;
   }
 
-  // Missile hits
-  missiles.forEach((m, mi) => {
+  // Bombs
+  bombs.forEach(b => b.y += 4);
+  bombs = bombs.filter(b => b.y < canvas.height - 40);
+
+  // Collisions bullets vs jets
+  bullets.forEach((b, bi) => {
     jets.forEach((jet, ji) => {
-      if (m.x > jet.x && m.x < jet.x + jet.width && m.y > jet.y && m.y < jet.y + jet.height) {
-        createExplosion(jet.x + jet.width / 2, jet.y + jet.height / 2);
+      if (b.x > jet.x && b.x < jet.x + jet.width && b.y > jet.y && b.y < jet.y + jet.height) {
+        createExplosion(jet.x + jet.width/2, jet.y + jet.height/2);
         jets.splice(ji, 1);
-        missiles.splice(mi, 1);
+        bullets.splice(bi, 1);
+        score++;
+      }
+    });
+  });
+  supportBullets.forEach((b, bi) => {
+    jets.forEach((jet, ji) => {
+      if (b.x > jet.x && b.x < jet.x + jet.width && b.y > jet.y && b.y < jet.y + jet.height) {
+        createExplosion(jet.x + jet.width/2, jet.y + jet.height/2);
+        jets.splice(ji, 1);
+        supportBullets.splice(bi, 1);
         score++;
       }
     });
   });
 
-  // Bomb hits
+  // Bombs hitting turret
   bombs.forEach((b, bi) => {
-    if (b.x > player.x - 20 && b.x < player.x + 20 && b.y > player.y - 20 && b.y < player.y + 20) {
+    if (b.x > turret.x && b.x < turret.x + turret.width && b.y > turret.y && b.y < turret.y + turret.height) {
       bombs.splice(bi, 1);
       if (!shieldActive) {
-        health--;
-        if (health <= 0) gameOver = true;
+        turretHealth--;
+        if (turretHealth <= 0) gameOver = true;
       }
     }
   });
 
-  // Background
-  ctx.fillStyle = darkMode ? "black" : "skyblue";
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-  if (darkMode) {
-    // Stars
-    ctx.fillStyle = "white";
-    stars.forEach(star => {
-      ctx.beginPath();
-      ctx.arc(star.x, star.y, star.r, 0, Math.PI * 2);
-      ctx.fill();
-    });
-    // Moon
-    ctx.fillStyle = "lightyellow";
-    ctx.beginPath();
-    ctx.arc(moon.x, moon.y, moon.r, 0, Math.PI * 2);
-    ctx.fill();
-  }
-
-  ctx.fillStyle = darkMode ? "grey" : "green";
-  ctx.fillRect(0, canvas.height - 50, canvas.width, 50);
-
-  // Clouds
-  if (!darkMode) {
-    ctx.fillStyle = "white";
-    clouds.forEach(cloud => {
-      ctx.beginPath();
-      ctx.arc(cloud.x, cloud.y, 20, 0, Math.PI * 2);
-      ctx.arc(cloud.x + 25, cloud.y + 10, 25, 0, Math.PI * 2);
-      ctx.arc(cloud.x - 25, cloud.y + 10, 25, 0, Math.PI * 2);
-      ctx.fill();
-      cloud.x += cloud.speed;
-      if (cloud.x > canvas.width + 50) cloud.x = -50;
-    });
-  }
-
-  // Turret
-  ctx.fillStyle = "darkgreen";
-  ctx.fillRect(player.x - 15, player.y, 30, 20);
-  ctx.fillRect(player.x - 5, player.y - 15, 10, 15);
-
-  if (shieldActive) {
-    ctx.strokeStyle = "gold";
-    ctx.lineWidth = 4;
-    ctx.beginPath();
-    ctx.arc(player.x, player.y, 30, 0, Math.PI * 2);
-    ctx.stroke();
-  }
-
-  // Missiles
-  ctx.fillStyle = "red";
-  missiles.forEach(m => {
-    ctx.beginPath();
-    ctx.arc(m.x, m.y, m.r, 0, Math.PI * 2);
-    ctx.fill();
+  // Jets hitting turret
+  jets.forEach((jet, ji) => {
+    if (jet.x < turret.x + turret.width && jet.x + jet.width > turret.x && jet.y + jet.height > turret.y) {
+      jets.splice(ji, 1);
+      if (!shieldActive) {
+        turretHealth--;
+        if (turretHealth <= 0) gameOver = true;
+      }
+    }
   });
 
-  // Jets
+  // Power-ups
+  powerUps.forEach(p => p.y += 2);
+  powerUps = powerUps.filter(p => {
+    if (p.x > turret.x - 25 && p.x < turret.x + turret.width + 25 &&
+        p.y > turret.y - 25 && p.y < turret.y + turret.height + 25) {
+      if (p.type === "dual") { dualMode = true; dualTimer = 600; }
+      else if (p.type === "black") { darkMode = true; darkTimer = 600; }
+      else if (p.type === "shield") { shieldActive = true; shieldTimer = 600; }
+      else if (p.type === "support") { supportActive = true; supportTimer = 600; }
+      return false;
+    }
+    return p.y < canvas.height;
+  });
+
+  // Timers
+  if (dualMode && --dualTimer <= 0) dualMode = false;
+  if (darkMode && --darkTimer <= 0) darkMode = false;
+  if (shieldActive && --shieldTimer <= 0) shieldActive = false;
+
+  // Score triggers
+  if (score > 0 && score % 20 === 0 && score !== lastSupportScore) {
+    spawnSpecialGreen();
+    lastSupportScore = score;
+  }
+  if (!giantJet && score > 0 && score % 50 === 0 && !giantTriggered) {
+    spawnGiantJet();
+    giantTriggered = true;
+  }
+  if (score % 50 !== 0) giantTriggered = false;
+
+  // Draw
+  drawFrame();
+
+  requestAnimationFrame(loop);
+}
+
+// --- Drawing (same as before, with night/day, stars, moon, hearts, etc.) ---
+function drawFrame() {
+  if (nightMode) {
+    ctx.fillStyle = "black";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.fillStyle = "white";
+    stars.forEach(s => { ctx.beginPath(); ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2); ctx.fill(); });
+    ctx.fillStyle = "lightyellow";
+    ctx.beginPath(); ctx.arc(moon.x, moon.y, moon.r, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = "grey"; ctx.fillRect(0, canvas.height - 50, canvas.width, 50);
+    ctx.fillStyle = "white"; ctx.font = "bold 28px Arial";
+    ctx.fillText("Rest yourself...", canvas.width/2 - 110, canvas.height/2 - 20);
+  } else {
+    ctx.fillStyle = "skyblue";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.fillStyle = "green";
+    ctx.fillRect(0, canvas.height - 50, canvas.width, 50);
+    ctx.fillStyle = "white";
+    ctx.beginPath(); ctx.arc(80, 60, 20, 0, Math.PI * 2);
+    ctx.arc(110, 60, 25, 0, Math.PI * 2); ctx.fill();
+  }
+
+  ctx.fillStyle = turret.color;
+  ctx.fillRect(turret.x, turret.y, turret.width, turret.height);
+  if (shieldActive) {
+    ctx.strokeStyle = "gold"; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.arc(turret.x+turret.width/2, turret.y+turret.height/2, 28, 0, Math.PI*2); ctx.stroke();
+  }
+
+  ctx.fillStyle = "red";
+  bullets.forEach(b => { ctx.beginPath(); ctx.arc(b.x, b.y, b.r, 0, Math.PI*2); ctx.fill(); });
+  ctx.fillStyle = "yellow";
+  supportBullets.forEach(b => { ctx.beginPath(); ctx.arc(b.x, b.y, b.r, 0, Math.PI*2); ctx.fill(); });
+
   jets.forEach(jet => {
-    ctx.fillStyle = jet.color ? jet.color : (darkMode ? "red" : "gray");
+    ctx.fillStyle = jet.color || (darkMode ? "red" : "gray");
     ctx.fillRect(jet.x + 15, jet.y, 20, 20);
     ctx.fillRect(jet.x, jet.y + 5, 50, 5);
     ctx.fillRect(jet.x + 20, jet.y + 20, 10, 10);
   });
 
-  // Giant Jet
-  if (giantJet) {
-    ctx.fillStyle = "limegreen";
-    ctx.fillRect(giantJet.x, giantJet.y, giantJet.width, giantJet.height);
-  }
-
-  // Bombs
+  if (giantJet) { ctx.fillStyle = "limegreen"; ctx.fillRect(giantJet.x, giantJet.y, giantJet.width, giantJet.height); }
   ctx.fillStyle = "black";
-  bombs.forEach(b => {
-    ctx.beginPath();
-    ctx.arc(b.x, b.y, b.r, 0, Math.PI * 2);
-    ctx.fill();
-  });
+  bombs.forEach(b => { ctx.beginPath(); ctx.arc(b.x, b.y, b.r, 0, Math.PI*2); ctx.fill(); });
+  powerUps.forEach(p => { ctx.fillStyle = p.color; ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, Math.PI*2); ctx.fill(); });
 
-  // Power-ups
-  if (powerUp) {
-    ctx.fillStyle = "blue";
-    ctx.beginPath();
-    ctx.arc(powerUp.x, powerUp.y, powerUp.r, 0, Math.PI * 2);
-    ctx.fill();
-  }
-  if (blackPower) {
-    ctx.fillStyle = "black";
-    ctx.beginPath();
-    ctx.arc(blackPower.x, blackPower.y, blackPower.r, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.strokeStyle = "white";
-    ctx.stroke();
-  }
-  if (shieldPower) {
-    ctx.fillStyle = "gold";
-    ctx.beginPath();
-    ctx.arc(shieldPower.x, shieldPower.y, shieldPower.r, 0, Math.PI * 2);
-    ctx.fill();
-  }
-
-  // Explosions
   explosions.forEach((ex, i) => {
-    ex.r += ex.grow || 2;
-    ex.alpha -= 0.05;
+    ex.r += ex.grow; ex.alpha -= 0.03;
+    ctx.fillStyle = `rgba(255,165,0,${Math.max(0, ex.alpha)})`;
+    ctx.beginPath(); ctx.arc(ex.x, ex.y, ex.r, 0, Math.PI*2); ctx.fill();
     if (ex.alpha <= 0) explosions.splice(i, 1);
-    ctx.fillStyle = `rgba(255,165,0,${ex.alpha})`;
-    ctx.beginPath();
-    ctx.arc(ex.x, ex.y, ex.r, 0, Math.PI * 2);
-    ctx.fill();
   });
 
-  // HUD
-  document.getElementById("hud").textContent =
-    `Score: ${score}`;
-
-  // Hearts for Health
-  for (let i = 0; i < health; i++) {
+  ctx.fillStyle = "white"; ctx.font = "18px Arial";
+  ctx.fillText("Score: " + score, canvas.width - 120, 28);
+  for (let i = 0; i < turretHealth; i++) {
     ctx.fillStyle = "red";
+    const hx = 20 + i*24, hy = 20;
     ctx.beginPath();
-    ctx.arc(30 + i * 25, 30, 8, 0, Math.PI * 2);
-    ctx.arc(40 + i * 25, 30, 8, 0, Math.PI * 2);
-    ctx.moveTo(23 + i * 25, 32);
-    ctx.lineTo(35 + i * 25, 50);
-    ctx.lineTo(47 + i * 25, 32);
-    ctx.fill();
+    ctx.arc(hx, hy, 6, 0, Math.PI*2);
+    ctx.arc(hx+8, hy, 6, 0, Math.PI*2);
+    ctx.moveTo(hx-6, hy+4); ctx.lineTo(hx+4, hy+14); ctx.lineTo(hx+16, hy+4);
+    ctx.closePath(); ctx.fill();
   }
-
-  // Check spawns
-  checkBomberSpawn();
-  checkGiantJet();
-
-  requestAnimationFrame(loop);
+  if (supportActive) {
+    ctx.fillStyle = "lime"; ctx.font = "20px Arial";
+    ctx.fillText("Support has arrived!", canvas.width/2 - 100, 50);
+  }
 }
 
-loop();
+function drawGameOver() {
+  ctx.fillStyle = "rgba(0,0,0,0.6)";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.fillStyle = "red";
+  ctx.font = "bold 48px Arial";
+  ctx.fillText("GAME OVER", canvas.width / 2 - 150, canvas.height / 2);
+}
+
+requestAnimationFrame(loop);

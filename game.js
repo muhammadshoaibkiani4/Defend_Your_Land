@@ -4,373 +4,278 @@ const ctx = canvas.getContext("2d");
 canvas.width = 800;
 canvas.height = 600;
 
-// Game state
 let keys = {};
 let bullets = [];
-let enemies = [];
-let powerUps = [];
-let explosions = [];
+let jets = [];
 let bombs = [];
-let clouds = [];
-let lastEnemySpawn = 0;
-let lastPowerUpSpawn = 0;
+let powerUps = [];
+let boss = null;
+
 let score = 0;
 let health = 10;
 let gameOver = false;
-let shieldActive = false;
-let shieldTimer = 0;
-let lastBomberSpawn = 0;
+let bossDefeated = false;
 
-// Player (turret)
+// Timers
+let jetSpawnTimer = 0;
+let bomberSpawnTimer = 0;
+let fleetSpawnTimer = 0;
+let nightTimer = 0;
+let powerUpSpawnTimer = 0;
+
+// Assets
+function drawTurret(x, y, shielded) {
+  ctx.fillStyle = shielded ? "gold" : "green";
+  ctx.fillRect(x - 20, y - 20, 40, 40); 
+  ctx.fillStyle = "gray";
+  ctx.fillRect(x - 5, y - 40, 10, 20);
+}
+
+function drawJet(jet) {
+  ctx.fillStyle = jet.color;
+  ctx.beginPath();
+  ctx.moveTo(jet.x, jet.y);
+  ctx.lineTo(jet.x - 15, jet.y + 30);
+  ctx.lineTo(jet.x + 15, jet.y + 30);
+  ctx.closePath();
+  ctx.fill();
+}
+
+function drawBoss(boss) {
+  ctx.fillStyle = "red";
+  ctx.beginPath();
+  ctx.moveTo(boss.x, boss.y);
+  ctx.lineTo(boss.x - 50, boss.y + 50);
+  ctx.lineTo(boss.x + 50, boss.y + 50);
+  ctx.closePath();
+  ctx.fill();
+  ctx.fillStyle = "black";
+  ctx.fillRect(boss.x - 10, boss.y + 20, 20, 30);
+}
+
+function drawHealthBar() {
+  ctx.fillStyle = "black";
+  ctx.fillRect(20, 20, 200, 20);
+  ctx.fillStyle = "lime";
+  ctx.fillRect(20, 20, (health / 10) * 200, 20);
+  ctx.strokeStyle = "white";
+  ctx.strokeRect(20, 20, 200, 20);
+}
+
+function drawBossHealthBar() {
+  if (boss) {
+    ctx.fillStyle = "black";
+    ctx.fillRect(canvas.width / 2 - 150, 20, 300, 20);
+    ctx.fillStyle = "red";
+    ctx.fillRect(
+      canvas.width / 2 - 150,
+      20,
+      (boss.health / 20) * 300,
+      20
+    );
+    ctx.strokeStyle = "white";
+    ctx.strokeRect(canvas.width / 2 - 150, 20, 300, 20);
+  }
+}
+
+function spawnJet() {
+  let colors = ["blue", "orange", "yellow"];
+  let color = colors[Math.floor(Math.random() * colors.length)];
+  jets.push({
+    x: Math.random() * (canvas.width - 30) + 15,
+    y: -30,
+    width: 30,
+    height: 30,
+    color: color,
+    speed: 2,
+  });
+}
+
+function spawnBoss() {
+  boss = {
+    x: canvas.width / 2,
+    y: 50,
+    width: 100,
+    height: 50,
+    color: "red",
+    health: 20,
+  };
+}
+
+function resetGame() {
+  keys = {};
+  bullets = [];
+  jets = [];
+  bombs = [];
+  powerUps = [];
+  boss = null;
+
+  score = 0;
+  health = 10;
+  gameOver = false;
+  bossDefeated = false;
+
+  document.getElementById("restartBtn").style.display = "none";
+}
+
+// Player
 let player = {
-    x: canvas.width / 2 - 25,
-    y: canvas.height - 60,
-    width: 500,
-    height: 600,
-    speed: 50
+  x: canvas.width / 2,
+  y: canvas.height - 60,
+  speed: 5,
+  shielded: false,
 };
 
-// Handle key presses
-document.addEventListener("keydown", (e) => {
-    keys[e.code] = true;
-    if (e.code === "Space" && !gameOver) {
-        bullets.push({ x: player.x + player.width / 2 - 2, y: player.y, width: 4, height: 10 });
+function update() {
+  if (gameOver || bossDefeated) return;
+
+  // Player movement
+  if (keys["ArrowLeft"] && player.x > 20) player.x -= player.speed;
+  if (keys["ArrowRight"] && player.x < canvas.width - 20) player.x += player.speed;
+
+  // Bullets
+  bullets.forEach((bullet, i) => {
+    bullet.y -= bullet.speed;
+    if (bullet.y < 0) bullets.splice(i, 1);
+
+    // Jets collision
+    jets.forEach((jet, j) => {
+      if (
+        bullet.x > jet.x - 15 &&
+        bullet.x < jet.x + 15 &&
+        bullet.y > jet.y &&
+        bullet.y < jet.y + 30
+      ) {
+        bullets.splice(i, 1);
+        jets.splice(j, 1);
+        score++;
+      }
+    });
+
+    // Boss collision
+    if (boss) {
+      if (
+        bullet.x > boss.x - 50 &&
+        bullet.x < boss.x + 50 &&
+        bullet.y > boss.y &&
+        bullet.y < boss.y + 50
+      ) {
+        bullets.splice(i, 1);
+        boss.health--;
+        if (boss.health <= 0) {
+          bossDefeated = true;
+          document.getElementById("restartBtn").style.display = "block";
+        }
+      }
     }
-});
-document.addEventListener("keyup", (e) => keys[e.code] = false);
+  });
 
-// Draw player turret with shield effect
-function drawPlayer() {
-    ctx.fillStyle = "green";
-    ctx.fillRect(player.x, player.y, player.width, player.height);
-
-    // Turret barrel
-    ctx.fillStyle = "darkblue";
-    ctx.fillRect(player.x + player.width / 2 - 5, player.y - 20, 10, 20);
-
-    // Shield effect
-    if (shieldActive) {
-        ctx.beginPath();
-        ctx.arc(player.x + player.width / 2, player.y + player.height / 2, 40, 0, Math.PI * 2);
-        ctx.strokeStyle = "gold";
-        ctx.lineWidth = 4;
-        ctx.shadowColor = "yellow";
-        ctx.shadowBlur = 20;
-        ctx.stroke();
-        ctx.shadowBlur = 0;
+  // Jets movement
+  jets.forEach((jet, j) => {
+    jet.y += jet.speed;
+    if (jet.y > canvas.height) {
+      // Orange and yellow jets deal damage if they reach ground
+      if (jet.color === "orange" || jet.color === "yellow") {
+        if (!player.shielded) health--;
+      }
+      jets.splice(j, 1);
     }
-}
 
-// Draw bullets
-function drawBullets() {
-    ctx.fillStyle = "green";
-    bullets.forEach(b => ctx.fillRect(b.x, b.y, b.width, b.height));
-}
-
-// Draw enemies
-function drawEnemies() {
-    enemies.forEach(e => {
-        if (e.type === "jet") {
-            ctx.fillStyle = "blue";
-            drawJet(e.x, e.y, e.size);
-        } else if (e.type === "blackJet") {
-            ctx.fillStyle = "orange";
-            drawJet(e.x, e.y, e.size);
-        } else if (e.type === "greenBoss") {
-            drawBigGreenJet(e.x, e.y);
-        } else if (e.type === "yellowJet") {
-            ctx.fillStyle = "yellow";
-            drawJet(e.x, e.y, e.size);
-        } else if (e.type === "bomber") {
-            drawBomber(e.x, e.y);
-        }
-    });
-}
-
-// Draw small jet
-function drawJet(x, y, size) {
-    ctx.beginPath();
-    ctx.moveTo(x, y);
-    ctx.lineTo(x - size / 2, y + size);
-    ctx.lineTo(x + size / 2, y + size);
-    ctx.closePath();
-    ctx.fill();
-}
-
-// Draw BIG green boss jet
-function drawBigGreenJet(x, y) {
-    ctx.fillStyle = "limegreen";
-    ctx.beginPath();
-    ctx.moveTo(x, y);
-    ctx.lineTo(x - 40, y + 60);
-    ctx.lineTo(x - 20, y + 60);
-    ctx.lineTo(x - 10, y + 90);
-    ctx.lineTo(x + 10, y + 90);
-    ctx.lineTo(x + 20, y + 60);
-    ctx.lineTo(x + 40, y + 60);
-    ctx.closePath();
-    ctx.fill();
-
-    ctx.fillStyle = "darkgreen";
-    ctx.fillRect(x - 10, y + 20, 20, 30);
-}
-
-// Draw bomber plane
-function drawBomber(x, y) {
-    ctx.fillStyle = "crimson";
-    ctx.beginPath();
-    ctx.moveTo(x, y);
-    ctx.lineTo(x - 40, y + 30);
-    ctx.lineTo(x + 40, y + 30);
-    ctx.closePath();
-    ctx.fill();
-}
-
-// Draw bombs
-function drawBombs() {
-    ctx.fillStyle = "black";
-    bombs.forEach(b => {
-        ctx.beginPath();
-        ctx.arc(b.x, b.y, 6, 0, Math.PI * 2);
-        ctx.fill();
-    });
-}
-
-// Draw power-ups
-function drawPowerUps() {
-    powerUps.forEach(p => {
-        if (p.type === "shield") ctx.fillStyle = "gold";
-        ctx.beginPath();
-        ctx.arc(p.x, p.y, 10, 0, Math.PI * 2);
-        ctx.fill();
-    });
-}
-
-// Draw clouds
-function drawClouds() {
-    ctx.fillStyle = "white";
-    clouds.forEach(c => {
-        ctx.beginPath();
-        ctx.arc(c.x, c.y, 20, 0, Math.PI * 2);
-        ctx.arc(c.x + 30, c.y + 10, 25, 0, Math.PI * 2);
-        ctx.arc(c.x - 30, c.y + 10, 25, 0, Math.PI * 2);
-        ctx.fill();
-    });
-}
-
-// Update bullets
-function updateBullets() {
-    bullets.forEach((b, bi) => {
-        b.y -= 7;
-        if (b.y < 0) bullets.splice(bi, 1);
-    });
-}
-
-// Update enemies
-function updateEnemies() {
-    enemies.forEach((e, ei) => {
-        if (e.type === "bomber") {
-            e.x -= e.speed;
-
-            // Drop a bomb occasionally
-            if (Math.random() < 0.01) {
-                bombs.push({ x: e.x, y: e.y + 30 });
-            }
-
-            if (e.x + 40 < 0) enemies.splice(ei, 1);
-        } else {
-            e.y += e.speed;
-
-            if (e.type === "yellowJet" && e.y > canvas.height) {
-                if (!shieldActive) health -= 1;
-                enemies.splice(ei, 1);
-            }
-
-            if (e.y > canvas.height) enemies.splice(ei, 1);
-        }
-    });
-}
-
-// Update bombs
-function updateBombs() {
-    bombs.forEach((b, bi) => {
-        b.y += 4;
-
-        if (b.y > canvas.height) {
-            if (!shieldActive) health -= 1;
-            bombs.splice(bi, 1);
-        }
-    });
-}
-
-// Update power-ups
-function updatePowerUps() {
-    powerUps.forEach((p, pi) => {
-        p.y += 2;
-
-        if (p.x < player.x + player.width &&
-            p.x + 10 > player.x &&
-            p.y < player.y + player.height &&
-            p.y + 10 > player.y) {
-
-            if (p.type === "shield") {
-                shieldActive = true;
-                shieldTimer = Date.now();
-            }
-            powerUps.splice(pi, 1);
-        }
-
-        if (p.y > canvas.height) powerUps.splice(pi, 1);
-    });
-}
-
-// Update shield timer
-function updateShield() {
-    if (shieldActive && Date.now() - shieldTimer > 10000) {
-        shieldActive = false;
+    if (
+      jet.x > player.x - 20 &&
+      jet.x < player.x + 20 &&
+      jet.y + 30 > player.y - 20
+    ) {
+      if (!player.shielded) health--;
+      jets.splice(j, 1);
     }
+  });
+
+  // Spawn jets
+  jetSpawnTimer++;
+  if (jetSpawnTimer > 60) {
+    spawnJet();
+    jetSpawnTimer = 0;
+  }
+
+  // Boss appears at 500 points
+  if (score >= 500 && !boss) {
+    spawnBoss();
+  }
+
+  // Check game over
+  if (health <= 0) {
+    gameOver = true;
+    document.getElementById("restartBtn").style.display = "block";
+  }
 }
 
-// Draw score and health bar
-function drawHUD() {
-    ctx.fillStyle = "black";
-    ctx.font = "20px Arial";
-    ctx.fillText("Score: " + score, 20, 30);
+function draw() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
 
+  // Background
+  ctx.fillStyle = "skyblue";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.fillStyle = "green";
+  ctx.fillRect(0, canvas.height - 50, canvas.width, 50);
+
+  // Player
+  drawTurret(player.x, player.y, player.shielded);
+
+  // Bullets
+  ctx.fillStyle = "red";
+  bullets.forEach((bullet) => {
+    ctx.fillRect(bullet.x - 2, bullet.y, 4, 10);
+  });
+
+  // Jets
+  jets.forEach((jet) => drawJet(jet));
+
+  // Boss
+  if (boss) {
+    drawBoss(boss);
+    drawBossHealthBar();
+  }
+
+  // Health
+  drawHealthBar();
+
+  // Score
+  ctx.fillStyle = "black";
+  ctx.font = "20px Arial";
+  ctx.fillText("Score: " + score, canvas.width - 120, 40);
+
+  // Game over / Victory
+  if (gameOver) {
     ctx.fillStyle = "red";
-    ctx.fillRect(20, 50, 100, 15);
+    ctx.font = "40px Arial";
+    ctx.fillText("GAME OVER", canvas.width / 2 - 120, canvas.height / 2);
+  }
+  if (bossDefeated) {
     ctx.fillStyle = "lime";
-    ctx.fillRect(20, 50, (health / 10) * 100, 15);
-    ctx.strokeStyle = "black";
-    ctx.strokeRect(20, 50, 100, 15);
+    ctx.font = "40px Arial";
+    ctx.fillText("VICTORY!", canvas.width / 2 - 100, canvas.height / 2);
+  }
 }
 
-// Collision detection
-function handleCollisions() {
-    enemies.forEach((e, ei) => {
-        bullets.forEach((b, bi) => {
-            if (b.x < e.x + e.size &&
-                b.x + b.width > e.x &&
-                b.y < e.y + e.size &&
-                b.y + b.height > e.y) {
-                score += 1;
-                bullets.splice(bi, 1);
-                enemies.splice(ei, 1);
-            }
-        });
-
-        if (player.x < e.x + e.size &&
-            player.x + player.width > e.x &&
-            player.y < e.y + e.size &&
-            player.y + player.height > e.y) {
-            if (!shieldActive) health -= 1;
-            enemies.splice(ei, 1);
-        }
-    });
-
-    bombs.forEach((b, bi) => {
-        if (b.x > player.x && b.x < player.x + player.width &&
-            b.y > player.y && b.y < player.y + player.height) {
-            if (!shieldActive) health -= 1;
-            bombs.splice(bi, 1);
-        }
-    });
-}
-
-// Spawn enemies
-function spawnEnemies() {
-    if (Date.now() - lastEnemySpawn > 1000) {
-        const x = Math.random() * (canvas.width - 30) + 15;
-        const typeChance = Math.random();
-
-        if (score % 50 === 0 && score !== 0) {
-            enemies.push({ x: canvas.width, y: 50, size: 80, speed: 2, type: "greenBoss" });
-        } else if (typeChance < 0.3) {
-            enemies.push({ x, y: -20, size: 30, speed: 2, type: "jet" });
-        } else if (typeChance < 0.6) {
-            enemies.push({ x, y: -20, size: 30, speed: 3, type: "orangeJet" });
-        } else {
-            enemies.push({ x, y: -20, size: 30, speed: 4, type: "yellowJet" });
-        }
-
-        lastEnemySpawn = Date.now();
-    }
-
-    // Spawn bomber every 20 points
-    if (score % 20 === 0 && score !== 0 && Date.now() - lastBomberSpawn > 10000) {
-        enemies.push({ x: canvas.width + 40, y: 100, size: 60, speed: 2, type: "bomber" });
-        lastBomberSpawn = Date.now();
-    }
-}
-
-// Spawn power-ups
-function spawnPowerUps() {
-    if (Date.now() - lastPowerUpSpawn > 15000) {
-        const x = Math.random() * (canvas.width - 20) + 10;
-        powerUps.push({ x, y: -20, type: "shield" });
-        lastPowerUpSpawn = Date.now();
-    }
-}
-
-// Spawn clouds
-function spawnClouds() {
-    if (clouds.length < 5 && Math.random() < 0.01) {
-        clouds.push({ x: canvas.width, y: Math.random() * 150 + 20, speed: 1 });
-    }
-    clouds.forEach((c, ci) => {
-        c.x -= c.speed;
-        if (c.x < -60) clouds.splice(ci, 1);
-    });
-}
-
-// Update player movement
-function updatePlayer() {
-    if (keys["ArrowLeft"] && player.x > 0) player.x -= player.speed;
-    if (keys["ArrowRight"] && player.x < canvas.width - player.width) player.x += player.speed;
-}
-
-// Main game loop
 function gameLoop() {
-    if (gameOver) {
-        ctx.fillStyle = "red";
-        ctx.font = "40px Arial";
-        ctx.fillText("GAME OVER", canvas.width / 2 - 120, canvas.height / 2);
-        return;
-    }
-
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-    // Background
-    ctx.fillStyle = "skyblue";
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-    ctx.fillStyle = "green";
-    ctx.fillRect(0, canvas.height - 50, canvas.width, 50);
-
-    drawClouds();
-    spawnClouds();
-
-    updatePlayer();
-    updateBullets();
-    updateEnemies();
-    updateBombs();
-    updatePowerUps();
-    updateShield();
-    handleCollisions();
-    spawnEnemies();
-    spawnPowerUps();
-
-    drawPlayer();
-    drawBullets();
-    drawEnemies();
-    drawBombs();
-    drawPowerUps();
-    drawHUD();
-
-    if (health <= 0) {
-        gameOver = true;
-    }
-
-    requestAnimationFrame(gameLoop);
+  update();
+  draw();
+  requestAnimationFrame(gameLoop);
 }
+
+document.addEventListener("keydown", (e) => {
+  keys[e.key] = true;
+  if (e.key === " " && !gameOver && !bossDefeated) {
+    bullets.push({ x: player.x, y: player.y - 30, speed: 7 });
+  }
+});
+
+document.addEventListener("keyup", (e) => {
+  keys[e.key] = false;
+});
+
+// Restart button
+document.getElementById("restartBtn").addEventListener("click", resetGame);
 
 gameLoop();

@@ -25,9 +25,9 @@ let lastBomberSpawn = 0;
 let player = {
     x: canvas.width / 2 - 25,
     y: canvas.height - 60,
-    width: 50,
-    height: 60,
-    speed: 5
+    width: 500,
+    height: 600,
+    speed: 50
 };
 
 // Handle key presses
@@ -45,7 +45,7 @@ function drawPlayer() {
     ctx.fillRect(player.x, player.y, player.width, player.height);
 
     // Turret barrel
-    ctx.fillStyle = "darkgreen";
+    ctx.fillStyle = "darkblue";
     ctx.fillRect(player.x + player.width / 2 - 5, player.y - 20, 10, 20);
 
     // Shield effect
@@ -63,7 +63,7 @@ function drawPlayer() {
 
 // Draw bullets
 function drawBullets() {
-    ctx.fillStyle = "red";
+    ctx.fillStyle = "green";
     bullets.forEach(b => ctx.fillRect(b.x, b.y, b.width, b.height));
 }
 
@@ -73,7 +73,7 @@ function drawEnemies() {
         if (e.type === "jet") {
             ctx.fillStyle = "blue";
             drawJet(e.x, e.y, e.size);
-        } else if (e.type === "orangeJet") {
+        } else if (e.type === "blackJet") {
             ctx.fillStyle = "orange";
             drawJet(e.x, e.y, e.size);
         } else if (e.type === "greenBoss") {
